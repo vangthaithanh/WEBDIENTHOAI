@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="3.0" xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx">
+ <!-- EF Designer content (DO NOT EDIT MANUALLY BELOW HERE) -->
+  <edmx:Designer xmlns="http://schemas.microsoft.com/ado/2009/11/edmx">
+    <!-- Diagram content (shape and connector positions) -->
+    <edmx:Diagrams>
+      <Diagram DiagramId="b60a49e10df6409c850e717db5c5099e" Name="Diagram1">
+        <EntityTypeShape EntityType="Test_webdtModel.CHITIETGH" Width="1.5" PointX="5.25" PointY="6.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="Test_webdtModel.CHITIETHD" Width="1.5" PointX="5.25" PointY="3.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="Test_webdtModel.CHITIETPN" Width="1.5" PointX="5.25" PointY="9.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="Test_webdtModel.DANHGIA" Width="1.5" PointX="5.25" PointY="13.125" IsExpanded="true" />
+        <EntityTypeShape EntityType="Test_webdtModel.GIAOHANG" Width="1.5" PointX="5.25" PointY="15.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="Test_webdtModel.GIOHANG" Width="1.5" PointX="3" PointY="14.625" IsExpanded="true" />
+        <EntityTypeShape EntityType="Test_webdtModel.HOADON" Width="1.5" PointX="3" PointY="2.375" IsExpanded="true" />
+        <EntityTypeShape EntityType="Test_webdtModel.KHACHHANG" Width="1.5" PointX="0.75" PointY="2.625" IsExpanded="true" />
+        <EntityTypeShape EntityType="Test_webdtModel.KHO" Width="1.5" PointX="6" PointY="0.75" IsExpanded="true" />
+        <EntityTypeShape EntityType="Test_webdtModel.LICHSUDUNGPKM" Width="1.5" PointX="6" PointY="18.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="Test_webdtModel.LICHSUMUA" Width="1.5" PointX="3" PointY="22" IsExpanded="true" />
+        <EntityTypeShape EntityType="Test_webdtModel.LOAISP" Width="1.5" PointX="0.75" PointY="6.875" IsExpanded="true" />
+        <EntityTypeShape EntityType="Test_webdtModel.NGUOIDUNG" Width="1.5" PointX="1.5" PointY="10.125" IsExpanded="true" />
+        <EntityTypeShape EntityType="Test_webdtModel.NHANVIEN" Width="1.5" PointX="0.75" PointY="18.625" IsExpanded="true" />
+        <EntityTypeShape EntityType="Test_webdtModel.PHIEUKHUYENMAI" Width="1.5" PointX="3.75" PointY="24.375" IsExpanded="true" />
+        <EntityTypeShape EntityType="Test_webdtModel.PHIEUNHAP" Width="1.5" PointX="3" PointY="18.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="Test_webdtModel.SANPHAM" Width="1.5" PointX="3" PointY="6.125" IsExpanded="true" />
+        <EntityTypeShape EntityType="Test_webdtModel.sysdiagram" Width="1.5" PointX="7.75" PointY="3.625" IsExpanded="true" />
+        <EntityTypeShape EntityType="Test_webdtModel.TAIKHOAN" Width="1.5" PointX="0.75" PointY="14.5" IsExpanded="true" />
+        <EntityTypeShape EntityType="Test_webdtModel.TONKHO" Width="1.5" PointX="8.25" PointY="6.625" IsExpanded="true" />
+        <AssociationConnector Association="Test_webdtModel.FK_CHITIETG_CHITIETGH_GIOHANG" ManuallyRouted="false" />
+        <AssociationConnector Association="Test_webdtModel.FK_CHITIETG_CHITIETGH_SANPHAM" ManuallyRouted="false" />
+        <AssociationConnector Association="Test_webdtModel.FK_CHITIETH_CHITIETHD_HOADON" ManuallyRouted="false" />
+        <AssociationConnector Association="Test_webdtModel.FK_CHITIETH_CHITIETHD_SANPHAM" ManuallyRouted="false" />
+        <AssociationConnector Association="Test_webdtModel.FK_CHITIETP_CHITIETPN_PHIEUNHA" ManuallyRouted="false" />
+        <AssociationConnector Association="Test_webdtModel.FK_CHITIETP_CHITIETPN_SANPHAM" ManuallyRouted="false" />
+        <AssociationConnector Association="Test_webdtModel.FK_DANHGIA_RELATIONS_HOADON" ManuallyRouted="false" />
+        <AssociationConnector Association="Test_webdtModel.FK_GIAOHANG_RELATIONS_HOADON" ManuallyRouted="false" />
+        <AssociationConnector Association="Test_webdtModel.FK_GIOHANG_RELATIONS_TAIKHOAN" ManuallyRouted="false" />
+        <AssociationConnector Association="Test_webdtModel.FK_HOADON_RELATIONS_KHACHHAN" ManuallyRouted="false" />
+        <AssociationConnector Association="Test_webdtModel.FK_KHACHHAN_RELATIONS_NGUOIDUN" ManuallyRouted="false" />
+        <AssociationConnector Association="Test_webdtModel.FK_LICHSUMU_RELATIONS_KHACHHAN" ManuallyRouted="false" />
+        <AssociationConnector Association="Test_webdtModel.FK_TONKHO_TONKHO2_KHO" ManuallyRouted="false" />
+        <AssociationConnector Association="Test_webdtModel.FK_LICHSUDU_LICHSUDUN_PHIEUKHU" ManuallyRouted="false" />
+        <AssociationConnector Association="Test_webdtModel.FK_LICHSUDU_LICHSUDUN_TAIKHOAN" ManuallyRouted="false" />
+        <AssociationConnector Association="Test_webdtModel.FK_SANPHAM_RELATIONS_LOAISP" ManuallyRouted="false" />
+        <AssociationConnector Association="Test_webdtModel.FK_NHANVIEN_RELATIONS_NGUOIDUN" ManuallyRouted="false" />
+        <AssociationConnector Association="Test_webdtModel.FK_TAIKHOAN_RELATIONS_NGUOIDUN" ManuallyRouted="false" />
+        <AssociationConnector Association="Test_webdtModel.FK_PHIEUNHA_RELATIONS_NHANVIEN" ManuallyRouted="false" />
+        <AssociationConnector Association="Test_webdtModel.FK_TONKHO_TONKHO_SANPHAM" ManuallyRouted="false" />
+      </Diagram>
+    </edmx:Diagrams>
+  </edmx:Designer>
+</edmx:Edmx>

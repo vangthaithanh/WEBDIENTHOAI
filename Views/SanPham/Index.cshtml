@@ -1,0 +1,437 @@
+﻿@model IEnumerable<WebDienThoai.Models.SANPHAM>
+
+@{
+    ViewBag.Title = "Trang chi tiết danh mục điện thoại";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    // sort + phân trang + series
+    string sort = ViewBag.Sort as string ?? "giathap";
+    string series = ViewBag.Series as string; // iphone14 / iphone15 / iphone16 / null
+    int page = ViewBag.Page != null ? (int)ViewBag.Page : 1;
+    bool hasMore = ViewBag.HasMore != null && (bool)ViewBag.HasMore;
+
+    var viewMap = ViewBag.ViewMap as IDictionary<string, int>;
+    var discountMap = ViewBag.DiscountMap as IDictionary<string, int>;
+    var giaGocMap = ViewBag.GiaGocMap as IDictionary<string, decimal>;
+}
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+    }
+
+    .category-wrapper {
+        background-color: #fdfaf7;
+        padding-bottom: 40px;
+    }
+
+    .category-top-note {
+        font-size: 16px;
+        color: #666769;
+        padding: 16px 40px 0;
+    }
+
+    .category-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 16px 16px 0;
+    }
+
+    .breadcrumb-custom {
+        font-size: 14px;
+        margin-bottom: 12px;
+        color: #231f20;
+    }
+
+        .breadcrumb-custom a {
+            color: #231f20;
+            text-decoration: none;
+        }
+
+        .breadcrumb-custom span {
+            margin-left: 4px;
+        }
+
+    /* Banner */
+    .banner-slider {
+        background: #231f20;
+        border-radius: 10px;
+        padding: 10px;
+        display: flex;
+        gap: 10px;
+        overflow: hidden;
+        margin-bottom: 20px;
+    }
+
+    .banner-item {
+        flex: 1;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+        .banner-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+    /* Tabs series */
+    .series-tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+        margin-top: 8px;
+    }
+
+    .series-tab {
+        border-radius: 999px;
+        padding: 8px 18px;
+        border: 1px solid #e0d6c8;
+        background: #f4ebdf;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        color: #000000;
+        text-decoration: none;
+        display: inline-block;
+    }
+
+        .series-tab.active {
+            background: #000000;
+            color: #ffffff;
+            border-color: #000000;
+        }
+
+    /* Sort bar */
+    .sort-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 18px;
+        margin-top: 4px;
+    }
+
+        .sort-bar span {
+            font-size: 14px;
+            color: #231f20;
+            font-weight: 600;
+        }
+
+    .sort-chip {
+        border-radius: 999px;
+        padding: 6px 16px;
+        border: 1px solid #e0d6c8;
+        background: #eae2d7;
+        font-size: 13px;
+        cursor: pointer;
+        color: #000000;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+        .sort-chip i {
+            font-size: 13px;
+        }
+
+        .sort-chip.active {
+            background: #000000;
+            color: #ffffff;
+            border-color: #000000;
+        }
+
+    /* Discount badge */
+    .discount-badge {
+        display: inline-block;
+        margin-left: 8px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #000;
+        color: #fff;
+        font-size: 11px;
+        font-weight: 700;
+        vertical-align: middle;
+    }
+
+    /* Product grid */
+    .product-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 20px;
+    }
+
+    @@media (max-width: 991px) {
+        .product-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @@media (max-width: 575px) {
+        .category-container {
+            padding: 0 10px;
+        }
+    }
+
+    .product-card {
+        position: relative;
+        background: #ffffff;
+        border-radius: 24px;
+        padding: 16px 16px 18px;
+        border: 2px solid #000000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+        .product-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 22px rgba(0,0,0,0.18);
+        }
+
+    .product-image {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding-bottom: 10px;
+        min-height: 170px;
+    }
+
+        .product-image img {
+            max-width: 100%;
+            max-height: 190px;
+            object-fit: contain;
+        }
+
+    .product-body {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+    }
+
+    .product-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: #000000;
+        line-height: 1.3;
+        min-height: 40px;
+        margin-bottom: 6px;
+    }
+
+    .product-price {
+        font-size: 13px;
+        margin-bottom: 4px;
+    }
+
+    .old-price {
+        text-decoration: line-through;
+        color: #a0a0a0;
+        display: inline-block;
+        font-size: 12px;
+    }
+
+    .new-price {
+        color: #A76D6D;
+        font-size: 15px;
+        font-weight: 700;
+        display: inline-block;
+        margin-top: 4px;
+    }
+
+    .buy-btn {
+        margin-top: 10px;
+        align-self: flex-start;
+        padding: 6px 22px;
+        border-radius: 999px;
+        border: 1px solid #000000;
+        background-color: #fdfaf7;
+        color: #000000;
+        font-size: 13px;
+        cursor: pointer;
+        text-decoration: none;
+    }
+
+        .buy-btn:hover {
+            background-color: #000000;
+            color: #ffffff;
+        }
+
+    .product-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: auto;
+        font-size: 11px;
+        color: #777777;
+    }
+
+        .product-meta i {
+            margin-right: 4px;
+        }
+
+    .see-more-wrapper {
+        text-align: center;
+        margin-top: 24px;
+        margin-bottom: 30px;
+    }
+
+    .btn-see-more {
+        border-radius: 999px;
+        padding: 9px 34px;
+        border: 1px solid #d0c5b7;
+        background: #eae2d7;
+        font-size: 13px;
+        cursor: pointer;
+        color: #000000;
+        text-decoration: none;
+    }
+
+        .btn-see-more:hover {
+            background: #000000;
+            color: #ffffff;
+            border-color: #000000;
+        }
+</style>
+
+<div class="category-wrapper">
+    <div class="category-top-note">
+        Trang chi tiết danh mục điện thoại đã đăng kí
+    </div>
+
+    <div class="category-container">
+        <!-- Breadcrumb -->
+        <nav class="breadcrumb-custom">
+            <a href="@Url.Action("Index","Home")">Trang chủ</a>
+            <span>/ Điện thoại / Apple</span>
+        </nav>
+
+        <!-- Banner -->
+        <div class="banner-slider">
+            <div class="banner-item">
+                <img src="~/Anh/banner/banner-iphone-1.jpg" alt="Banner 1" />
+            </div>
+            <div class="banner-item">
+                <img src="~/Anh/banner/banner-iphone-2.jpg" alt="Banner 2" />
+            </div>
+            <div class="banner-item">
+                <img src="~/Anh/banner/banner-iphone-3.jpg" alt="Banner 3" />
+            </div>
+        </div>
+
+        <!-- Tabs series -->
+        <div class="series-tabs">
+            <a class="series-tab @((string.IsNullOrWhiteSpace(series)) ? "active" : "")"
+               href="@Url.Action("Index","SanPham", new { series = (string)null, sort = sort, page = 1 })">TẤT CẢ</a>
+
+            <a class="series-tab @((series == "iphone16") ? "active" : "")"
+               href="@Url.Action("Index","SanPham", new { series = "iphone16", sort = sort, page = 1 })">IPHONE16 SERIES</a>
+
+            <a class="series-tab @((series == "iphone15") ? "active" : "")"
+               href="@Url.Action("Index","SanPham", new { series = "iphone15", sort = sort, page = 1 })">IPHONE15 SERIES</a>
+
+            <a class="series-tab @((series == "iphone14") ? "active" : "")"
+               href="@Url.Action("Index","SanPham", new { series = "iphone14", sort = sort, page = 1 })">IPHONE14 SERIES</a>
+        </div>
+
+        <!-- Sort bar -->
+        <div class="sort-bar">
+            <span>Sắp xếp theo</span>
+
+            <a href="@Url.Action("Index","SanPham", new { sort = "giathap", series = series, page = 1 })"
+               class="sort-chip @(sort == "giathap" ? "active" : "")">
+                <i class="fa fa-arrow-down"></i> Giá thấp
+            </a>
+
+            <a href="@Url.Action("Index","SanPham", new { sort = "giacao", series = series, page = 1 })"
+               class="sort-chip @(sort == "giacao" ? "active" : "")">
+                <i class="fa fa-arrow-up"></i> Giá cao
+            </a>
+
+            <a href="@Url.Action("Index","SanPham", new { sort = "khuyenmai", series = series, page = 1 })"
+               class="sort-chip @(sort == "khuyenmai" ? "active" : "")">
+                <i class="fa fa-percent"></i> Khuyến mãi hot
+            </a>
+
+            <a href="@Url.Action("Index","SanPham", new { sort = "xemnhieu", series = series, page = 1 })"
+               class="sort-chip @(sort == "xemnhieu" ? "active" : "")">
+                <i class="fa fa-eye"></i> Xem nhiều
+            </a>
+        </div>
+
+        <!-- Product grid -->
+        <div class="product-grid">
+            @foreach (var sp in Model)
+            {
+                var masp = (sp.MASP ?? "").Trim();
+
+                int luotXem = 0;
+                int giam = 0;
+
+                decimal giaBan = sp.GIABAN.HasValue ? Convert.ToDecimal(sp.GIABAN.Value) : 0m;
+                decimal giaGoc = giaBan;
+
+                if (viewMap != null && viewMap.ContainsKey(masp)) { luotXem = viewMap[masp]; }
+                if (discountMap != null && discountMap.ContainsKey(masp)) { giam = discountMap[masp]; }
+                if (giaGocMap != null && giaGocMap.ContainsKey(masp)) { giaGoc = giaGocMap[masp]; }
+
+                string img = sp.ANHSP;
+                if (string.IsNullOrWhiteSpace(img))
+                {
+                    img = "~/Anh/no-image.png";
+                }
+                else
+                {
+                    img = img.Trim();
+                    if (!(img.StartsWith("~") || img.StartsWith("/")))
+                    {
+                        img = "~/" + img.TrimStart('/');
+                    }
+                }
+
+                <a href="@Url.Action("Details", "SanPham", new { id = masp })" style="text-decoration:none; color:inherit;">
+                    <div class="product-card">
+                        <div class="product-image">
+                            <img src="@Url.Content(img)" alt="@sp.TENSP" />
+                        </div>
+
+                        <div class="product-body">
+                            <h3 class="product-name">@sp.TENSP</h3>
+
+                            <div class="product-price">
+                                <span class="old-price">@String.Format("{0:0,0} đ", giaGoc)</span>
+                                <span class="discount-badge">-@giam%</span>
+                                <div>
+                                    <span class="new-price">@String.Format("{0:0,0} đ", giaBan)</span>
+                                </div>
+                            </div>
+
+                            <span class="buy-btn">Mua Ngay</span>
+
+                            <div class="product-meta">
+                                <span class="rating">
+                                    <i class="fa fa-star"></i><i class="fa fa-star"></i><i class="fa fa-star"></i><i class="fa fa-star"></i><i class="fa fa-star"></i>
+                                </span>
+                                <span class="views">
+                                    <i class="fa fa-eye"></i> @String.Format("{0:0,0} lượt xem", luotXem)
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+            }
+        </div>
+        <!-- Xem thêm -->
+        @if (hasMore)
+        {
+            <div class="see-more-wrapper">
+                <a class="btn-see-more"
+                   href="@Url.Action("Index", "SanPham", new { sort = sort, series = series, page = page + 1 })">
+                    Xem thêm
+                </a>
+            </div>
+        }
+    </div>
+</div>

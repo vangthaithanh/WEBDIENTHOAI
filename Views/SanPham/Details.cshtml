@@ -1,0 +1,627 @@
+﻿@using System
+@using System.IO
+@using System.Linq
+@using System.Collections.Generic
+@using System.Security.Cryptography
+@using System.Text
+
+@model WebDienThoai.Models.SANPHAM
+
+@{
+    ViewBag.Title = Model.TENSP;
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    // ===== Helpers: normalize url =====
+    Func<string, string> ToAppRel = (raw) =>
+    {
+        var p = (raw ?? "").Replace("\\", "/").Trim();
+        if (string.IsNullOrWhiteSpace(p)) return "Anh/no-image.png";
+
+// bỏ "~/" hoặc "/" đầu
+if (p.StartsWith("~/")) p = p.Substring(2);
+        if (p.StartsWith("/")) p = p.TrimStart('/');
+
+        return p;
+    };
+
+    Func<string, string> ToUrl = (raw) =>
+    {
+        var rel = ToAppRel(raw);
+        return Url.Content("~/" + rel);
+    };
+
+    // ===== Lấy folder từ ANHSP =====
+    string mainRel = ToAppRel(Model.ANHSP);
+    string baseRelDir = "Anh";
+    string mainFile = "";
+
+    if (mainRel.Contains("/"))
+    {
+        baseRelDir = mainRel.Substring(0, mainRel.LastIndexOf('/'));
+        mainFile = mainRel.Substring(mainRel.LastIndexOf('/') + 1);
+    }
+    else
+    {
+        mainFile = mainRel;
+    }
+
+    string basePhysical = "";
+    var galleryUrls = new List<string>();
+    var colorUrls = new List<string>();
+    var thongTinUrls = new List<string>();
+
+    Func<string, bool> IsImg = (f) =>
+    {
+        var ext = (Path.GetExtension(f) ?? "").ToLower();
+        return ext == ".webp" || ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif";
+    };
+
+    Func<string, IEnumerable<string>> ListImgFiles = (physicalDir) =>
+    {
+        if (string.IsNullOrWhiteSpace(physicalDir) || !Directory.Exists(physicalDir))
+            return Enumerable.Empty<string>();
+
+        return Directory.GetFiles(physicalDir)
+                        .Where(IsImg)
+                        .Select(Path.GetFileName)
+                        .OrderBy(x => x, StringComparer.OrdinalIgnoreCase);
+    };
+
+    try
+    {
+        basePhysical = Server.MapPath("~/" + baseRelDir);
+
+        // Gallery: lấy ảnh ngay trong folder sản phẩm (không lấy subfolder)
+        var galleryFiles = ListImgFiles(basePhysical).ToList();
+
+        // Đưa ảnh main lên đầu
+        if (!string.IsNullOrWhiteSpace(mainFile))
+        {
+            galleryFiles = galleryFiles
+                .OrderByDescending(f => f.Equals(mainFile, StringComparison.OrdinalIgnoreCase))
+                .ThenBy(f => f, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        foreach (var f in galleryFiles)
+        {
+            galleryUrls.Add(Url.Content("~/" + baseRelDir + "/" + f));
+        }
+
+        // Màu sắc: folder /mau
+        var mauPhysical = Path.Combine(basePhysical, "mau");
+        foreach (var f in ListImgFiles(mauPhysical))
+        {
+            colorUrls.Add(Url.Content("~/" + baseRelDir + "/mau/" + f));
+        }
+
+        // Thông số kỹ thuật: folder /thongtin (lấy 4 ảnh)
+        var thongtinPhysical = Path.Combine(basePhysical, "thongtin");
+        foreach (var f in ListImgFiles(thongtinPhysical).Take(4))
+        {
+            thongTinUrls.Add(Url.Content("~/" + baseRelDir + "/thongtin/" + f));
+        }
+    }
+    catch
+    {
+        // nếu host không cho đọc file system thì vẫn render được ảnh main
+    }
+
+    // fallback: nếu gallery rỗng thì dùng ảnh main
+    var mainUrl = ToUrl(Model.ANHSP);
+    if (galleryUrls.Count == 0)
+    {
+        galleryUrls.Add(mainUrl);
+    }
+
+    var firstGallery = galleryUrls.FirstOrDefault() ?? mainUrl;
+
+    // ===== Giá =====
+    decimal giaBan = Model.GIABAN.HasValue ? Convert.ToDecimal(Model.GIABAN.Value) : 0m;
+
+    // Giảm giá random ổn định theo MASP (nếu bạn muốn)
+    int giam = 0;
+    if (ViewBag.GiamGiaPercent != null)
+    {
+        giam = (int)ViewBag.GiamGiaPercent;
+    }
+    else
+    {
+        // stable random
+        string key = (Model.MASP ?? Model.TENSP ?? "").Trim();
+        int StableRandomInt(string k, int min, int max, string salt)
+        {
+            if (max < min) { var t = min; min = max; max = t; }
+            if (min == max) return min;
+            using (var md5 = MD5.Create())
+            {
+                var bytes = Encoding.UTF8.GetBytes((salt ?? "") + "|" + (k ?? ""));
+                var hash = md5.ComputeHash(bytes);
+                int val = BitConverter.ToInt32(hash, 0) & 0x7fffffff;
+                int range = (max - min) + 1;
+                return min + (val % range);
+            }
+        }
+        giam = StableRandomInt(key, 5, 60, "discount_percent");
+    }
+
+    decimal giaGoc = giaBan + (giaBan * giam / 100m);
+
+    // Reviews
+    var danhGias = ViewBag.DanhGias as List<WebDienThoai.Models.DANHGIA>;
+}
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+    }
+
+    .detail-wrapper {
+        background-color: #fdfaf7;
+        padding: 26px 0 50px;
+    }
+
+    .detail-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: #ffffff;
+        border-radius: 24px;
+        border: 2px solid #000000;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+        padding: 18px 22px 22px;
+        display: grid;
+        grid-template-columns: 2fr 1.15fr;
+        gap: 22px;
+    }
+
+    @@media (max-width: 991px) {
+        .detail-container {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .detail-left-title {
+        font-size: 20px;
+        font-weight: 700;
+        margin-bottom: 12px;
+        color: #000000;
+    }
+
+    /* ===== LEFT: Gallery ===== */
+    /* ĐÃ BỎ CỘT ẢNH NHỎ BÊN PHẢI ẢNH BỰ => chỉ còn 1 cột */
+    .gallery-wrap {
+        display: block;
+    }
+
+    .gallery-main {
+        border: 1px solid #eae2d7;
+        border-radius: 18px;
+        background: #ffffff;
+        padding: 14px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 320px;
+    }
+
+        .gallery-main img {
+            max-width: 100%;
+            max-height: 320px;
+            object-fit: contain;
+        }
+
+    .gallery-bottom {
+        margin-top: 12px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .thumb-sm {
+        width: 60px;
+        height: 60px;
+        border-radius: 12px;
+        border: 1px solid #eae2d7;
+        background: #ffffff;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        overflow: hidden;
+    }
+
+        .thumb-sm.active {
+            outline: 2px solid #000000;
+        }
+
+        .thumb-sm img {
+            max-width: 85%;
+            max-height: 85%;
+            object-fit: contain;
+        }
+
+    /* ===== Spec images (4 ảnh) ===== */
+    .spec-box {
+        margin-top: 16px;
+        border-radius: 16px;
+        border: 1px solid #eae2d7;
+        background: #ffffff;
+        overflow: hidden;
+    }
+
+    .spec-header {
+        background: #f4ebdf;
+        padding: 10px 14px;
+        font-weight: 700;
+        color: #231f20;
+    }
+
+    .spec-grid {
+        padding: 12px;
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        background: #ffffff;
+    }
+
+    .spec-img {
+        border: 1px solid #f0e4d6;
+        border-radius: 14px;
+        padding: 10px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 120px;
+        background: #ffffff;
+    }
+
+        .spec-img img {
+            max-width: 100%;
+            max-height: 140px;
+            object-fit: contain;
+        }
+
+    /* ===== RIGHT ===== */
+    .detail-right {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .price-box {
+        border-radius: 16px;
+        background: #f4ebdf;
+        padding: 12px 14px;
+    }
+
+    .price-box-title {
+        font-size: 13px;
+        color: #666769;
+        margin-bottom: 4px;
+    }
+
+    .price-line {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .price-main {
+        font-size: 22px;
+        font-weight: 700;
+        color: #A76D6D;
+    }
+
+    .price-old {
+        font-size: 13px;
+        text-decoration: line-through;
+        color: #c0b2a2;
+    }
+
+    .discount-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #000;
+        color: #fff;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .color-choose-title {
+        margin-top: 4px;
+        font-size: 13px;
+        color: #231f20;
+        margin-bottom: 6px;
+        font-weight: 600;
+    }
+
+    .color-choose-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .color-box {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        background: #ffffff;
+        border: 1px solid #e0d4c4;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+
+        .color-box.active {
+            outline: 2px solid #000000;
+        }
+
+        .color-box img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+        }
+
+    .benefit-box {
+        border-radius: 16px;
+        padding: 10px 12px;
+        background: #eae2d7;
+        font-size: 13px;
+        color: #231f20;
+    }
+
+    .benefit-item {
+        margin-bottom: 6px;
+    }
+
+        .benefit-item i {
+            color: #A76D6D;
+            margin-right: 6px;
+        }
+
+    .detail-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .btn-buy-now, .btn-add-cart {
+        width: 100%;
+        padding: 10px 0;
+        border-radius: 999px;
+        border: 1px solid #000000;
+        text-align: center;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        text-decoration: none;
+    }
+
+    .btn-buy-now {
+        background: #000;
+        color: #fff;
+    }
+
+        .btn-buy-now:hover {
+            opacity: .92;
+        }
+
+    .btn-add-cart {
+        background: #f4ebdf;
+        color: #000;
+    }
+
+        .btn-add-cart:hover {
+            background: #000;
+            color: #fff;
+        }
+
+    .review-box {
+        margin-top: 6px;
+        border-radius: 16px;
+        border: 1px solid #e0d6c8;
+        background: #ffffff;
+        padding: 10px 12px 12px;
+    }
+
+    .review-header {
+        font-weight: 700;
+        margin-bottom: 6px;
+        color: #231f20;
+        font-size: 14px;
+    }
+
+    .review-item {
+        padding: 8px 0;
+        border-top: 1px solid #f0e4d6;
+        font-size: 13px;
+    }
+
+    .review-name {
+        color: #A76D6D;
+        font-weight: 700;
+    }
+
+    .review-stars {
+        color: #f2b01e;
+        margin-right: 6px;
+    }
+
+    .btn-all-review {
+        display: inline-block;
+        margin-top: 6px;
+        font-size: 12px;
+        color: #000;
+        text-decoration: underline;
+        cursor: pointer;
+    }
+</style>
+
+<div class="detail-wrapper">
+    <div class="detail-container">
+
+        <!-- LEFT -->
+        <div>
+            <div class="detail-left-title">@Model.TENSP | Chính hãng VN/A</div>
+
+            <div class="gallery-wrap">
+                <div class="gallery-main">
+                    <img id="jsMainImg" src="@firstGallery" alt="@Model.TENSP" />
+                </div>
+            </div>
+
+            <div class="gallery-bottom">
+                @{
+                    var bottom = galleryUrls.Take(6).ToList();
+                    for (int i = 0; i < bottom.Count; i++)
+                    {
+                        var u = bottom[i];
+                        <div class="thumb-sm @(i==0 ? "active" : "")" data-img="@u">
+                            <img src="@u" alt="">
+                        </div>
+                    }
+                }
+            </div>
+
+            <!-- Thông số kỹ thuật: chỉ ảnh -->
+            <div class="spec-box">
+                <div class="spec-header">Thông số kỹ thuật</div>
+                <div class="spec-grid">
+                    @if (thongTinUrls != null && thongTinUrls.Count > 0)
+                    {
+                        foreach (var u in thongTinUrls.Take(4))
+                        {
+                            <div class="spec-img">
+                                <img src="@u" alt="">
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        // fallback nếu chưa có ảnh thongtin
+                        for (int i = 0; i < 4; i++)
+                        {
+                            <div class="spec-img">
+                                <img src="@Url.Content("~/Anh/no-image.png")" alt="">
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT -->
+        <div class="detail-right">
+            <div class="price-box">
+                <div class="price-box-title">Giá sản phẩm</div>
+                <div class="price-line">
+                    <span class="price-main">@String.Format("{0:0,0} đ", giaBan)</span>
+                    <span class="price-old">@String.Format("{0:0,0} đ", giaGoc)</span>
+                    <span class="discount-badge">-@giam%</span>
+                </div>
+
+                <div class="color-choose-title">Màu sắc</div>
+                <div class="color-choose-row">
+                    @if (colorUrls != null && colorUrls.Count > 0)
+                    {
+                        for (int i = 0; i < colorUrls.Count; i++)
+                        {
+                            var u = colorUrls[i];
+                            <div class="color-box @(i==0 ? "active" : "")" data-img="@u">
+                                <img src="@u" alt="">
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        // nếu chưa có folder mau thì show 4 ô trống
+                        for (int i = 0; i < 4; i++)
+                        {
+                            <div class="color-box"></div>
+                        }
+                    }
+                </div>
+            </div>
+
+            <div class="benefit-box">
+                <div class="benefit-item"><i class="fa fa-check-circle"></i> Thẻ điểm tích 237.000đ cho Member</div>
+                <div class="benefit-item"><i class="fa fa-check-circle"></i> Máy mới 100%, chính hãng VN</div>
+                <div class="benefit-item"><i class="fa fa-check-circle"></i> Ưu đãi Học sinh - sinh viên, Giảng viên</div>
+            </div>
+
+            <div class="detail-buttons">
+                <a class="btn-buy-now" href="javascript:void(0)">MUA NGAY</a>
+                <a class="btn-add-cart" href="javascript:void(0)">THÊM VÀO GIỎ HÀNG</a>
+            </div>
+
+            <div class="review-box">
+                <div class="review-header">Đánh giá</div>
+
+                @if (danhGias != null && danhGias.Any())
+                {
+                    foreach (var dg in danhGias)
+                    {
+                        <div class="review-item">
+                            <span class="review-name">@dg.HOADON.KHACHHANG.NGUOIDUNG.HOTEN</span>
+                            <div>
+                                <span class="review-stars">
+                                    @for (int i = 1; i <= 5; i++)
+                                    {
+                                        if (i <= dg.SOSAO)
+                                        {<i class="fa fa-star"></i> }
+                                        else
+                                        { <i class="fa fa-star-o"></i>}
+                                    }
+                                </span>
+                                <span>@(dg.GHICHU ?? "")</span>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="review-item" style="border-top:none;">Chưa có đánh giá nào cho sản phẩm này.</div>
+                }
+
+                <a class="btn-all-review" href="javascript:void(0)">Xem tất cả đánh giá</a>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    (function () {
+        const main = document.getElementById('jsMainImg');
+        if (!main) return;
+
+        function setActive(selector, el) {
+            document.querySelectorAll(selector).forEach(x => x.classList.remove('active'));
+            el.classList.add('active');
+        }
+
+        // click thumb dưới ảnh bự
+        document.querySelectorAll('.thumb-sm[data-img]').forEach(el => {
+            el.addEventListener('click', function () {
+                const src = this.getAttribute('data-img');
+                if (src) main.src = src;
+                setActive('.thumb-sm', this);
+            });
+        });
+
+        // click màu sắc
+        document.querySelectorAll('.color-box[data-img]').forEach(el => {
+            el.addEventListener('click', function () {
+                const src = this.getAttribute('data-img');
+                // Nếu bạn muốn bấm màu đổi ảnh main:
+                if (src) main.src = src;
+
+                setActive('.color-box', this);
+            });
+        });
+    })();
+</script>
