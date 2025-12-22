@@ -26,16 +26,33 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach (var nv in Model)
+                @foreach (var u in Model)
                 {
                     <tr>
-                        <td>@nv.ID</td>
-                        <td>@nv.UserName</td>
-                        <td>@nv.HoTen</td>
-                        <td>@nv.SDT</td>
-                        <td>@nv.Email</td>
-                        <td>@nv.ChucVu</td>
-                        <td>@(nv.NgayVaoLam.HasValue ? nv.NgayVaoLam.Value.ToString("dd/MM/yyyy") : "")</td>
+                        <td>@u.ID</td>
+                        <td>@u.UserName</td>
+                        <td>@u.HoTen</td>
+                        <td>@u.SDT</td>
+                        <td>@u.Email</td>
+
+                        <td style="min-width:220px;">
+                            @using (Html.BeginForm("ChangeRole", "QuanLyNhanSu", FormMethod.Post, new { @class = "d-flex gap-2 align-items-center" }))
+                            {
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@u.ID" />
+
+                                <select name="roleCode" class="form-select form-select-sm">
+                                    <option value="ADMIN" @(u.RoleCode == "ADMIN" ? "selected" : "")>ADMIN - Quản lý</option>
+                                    <option value="NVKHO" @(u.RoleCode == "NVKHO" ? "selected" : "")>NVKHO - Nhân viên Kho</option>
+                                    <option value="NVSP" @(u.RoleCode == "NVSP" ? "selected" : "")>NVSP - Nhân viên bán hàng</option>
+                                    <option value="KHACH" @(u.RoleCode == "KHACH" ? "selected" : "")>KHACH - Khách hàng</option>
+                                </select>
+
+                                <button type="submit" class="btn btn-sm btn-primary">Lưu</button>
+                            }
+                        </td>
+
+                        <td>@(u.NgayVaoLam.HasValue ? u.NgayVaoLam.Value.ToString("dd/MM/yyyy") : "")</td>
                     </tr>
                 }
             </tbody>

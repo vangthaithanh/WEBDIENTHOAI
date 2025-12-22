@@ -71,9 +71,9 @@
         }
         @if (role == "ADMIN" )
         {
-            <a class="menu-item nav-link d-flex align-items-center gap-3 p-3 rounded-3 text-secondary fw-medium mb-1 @ActiveCtrl("ThongTinCaNhan")"
-               href="#">
-                <i class="fa-solid fa-id-card"></i><span>Thống kê doanh thu</span>
+            <a class="menu-item nav-link d-flex align-items-center gap-3 p-3 rounded-3 text-secondary fw-medium mb-1 @ActiveCtrl("ThongKeDoanhThu")"
+               href="@Url.Action("ThongKeDoanhThu","QuanLyKho")">
+                <i class="fa-solid fa-chart-line"></i><span>Thống kê doanh thu</span>
             </a>
         }
             <hr class="my-3 text-secondary" />

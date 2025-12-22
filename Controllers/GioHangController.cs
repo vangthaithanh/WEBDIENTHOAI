@@ -181,7 +181,7 @@ namespace WebDienThoai.Controllers
         [ValidateAntiForgeryToken]
         public ActionResult ThanhToanMuaNgay(int masp, int soluong = 1)
         {
-            var tentk = Session["UserName"] as string; // đúng theo AccountController
+            var tentk = Session["UserName"] as string; 
             if (string.IsNullOrWhiteSpace(tentk))
             {
                 SetPopupError("Bạn cần đăng nhập trước khi mua ngay.");
@@ -230,7 +230,7 @@ namespace WebDienThoai.Controllers
                 SetPopupError("Mua ngay thất bại: " + ex.Message);
             }
 
-            return MuaNgay(masp, soluong);
+            return RedirectToAction("Index", "Home");
         }
 
         // =========================
@@ -275,35 +275,60 @@ namespace WebDienThoai.Controllers
             var tentk = Session["UserName"] as string;
             if (string.IsNullOrWhiteSpace(tentk))
             {
-                SetPopupError("Bạn cần đăng nhập trước khi mua.");
+                SetPopupError("Bạn cần đăng nhập trước khi mua ngay.");
                 return RedirectToAction("Login", "Account");
             }
 
             if (soluong < 1) soluong = 1;
 
-            var p = GetProductDetail(masp);
-            if (p == null)
+            try
             {
-                SetPopupError("Không tìm thấy sản phẩm.");
-                return RedirectToAction("Index", "Home");
+                int? mahd = null;
+                decimal? thanhtien = null;
+
+                using (var conn = new SqlConnection(_connAdmin))
+                using (var cmd = new SqlCommand("dbo.sp_MuaNgay", conn))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+
+                    cmd.Parameters.Add("@TENTK", SqlDbType.VarChar, 100).Value = tentk;
+
+                    // IMPORTANT: có kho cụ thể
+                    cmd.Parameters.Add("@MAKHO", SqlDbType.Int).Value = 1;
+
+                    cmd.Parameters.Add("@MASP", SqlDbType.Int).Value = masp;
+                    cmd.Parameters.Add("@SOLUONG", SqlDbType.Int).Value = soluong;
+
+                    conn.Open();
+                    using (var rd = cmd.ExecuteReader())
+                    {
+                        if (rd.Read())
+                        {
+                            if (rd["MAHD"] != DBNull.Value) mahd = Convert.ToInt32(rd["MAHD"]);
+                            if (rd["THANHTIEN"] != DBNull.Value) thanhtien = Convert.ToDecimal(rd["THANHTIEN"]);
+                        }
+                    }
+                }
+
+                SetPopupSuccess(mahd.HasValue
+                    ? $"Mua ngay thành công. Mã HĐ: {mahd} - Tổng tiền: {(thanhtien ?? 0):N0} đ"
+                    : "Mua ngay thành công.");
+
+                // back giỏ hàng để hiện popup giống flow khác
+                return RedirectToAction("Index", "GioHang");
             }
-
-            // Dựng 1 “cart item” để dùng chung view preview
-            var item = new GioHang
+            catch (SqlException ex)
             {
-                MASP = p.MASP,
-                TENSP = p.TENSP,
-                ANH = p.ANH,
-                DONGIA = p.GIABAN,
-                SOLUONG = soluong
-            };
-
-            var vm = new CheckoutPreviewVM { Items = new List<GioHang> { item } };
-
-            // để preview biết đây là mua ngay (không phải giỏ hàng)
-            ViewBag.IsMuaNgay = true;
-            return View("XacNhanThanhToan", vm);
+                SetPopupError("Mua ngay thất bại: " + ex.Message);
+                return RedirectToAction("Index", "GioHang");
+            }
+            catch (Exception ex)
+            {
+                SetPopupError("Mua ngay thất bại: " + ex.Message);
+                return RedirectToAction("Index", "GioHang");
+            }
         }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public ActionResult ThanhToan(int[] selectedItems)

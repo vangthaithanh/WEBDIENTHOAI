@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Configuration;
 using System.Data;
 using System.Data.SqlClient;
 using WebDienThoai.Models;
@@ -11,10 +10,28 @@ namespace WebDienThoai.DAL
     public class QuanLyKhoDAL
     {
         private readonly string _cs;
+
         public QuanLyKhoDAL(string connectionString)
         {
             _cs = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
         }
+
+        // ===== DTO phục vụ combobox + map JS =====
+        public class SanPhamNhapDto
+        {
+            public int MASP { get; set; }
+            public int MALOAI { get; set; }
+            public string TENSP { get; set; }
+            public decimal GIABAN { get; set; } // vẫn giữ để map (nếu bạn cần), nhưng View sẽ không hiển thị nữa
+            public string ANH { get; set; }
+        }
+
+        public class LoaiSanPhamDto
+        {
+            public int MALOAI { get; set; }
+            public string TENLOAI { get; set; }
+        }
+
         // ===== KHO =====
         public List<Kho> GetKhoAll()
         {
@@ -39,11 +56,118 @@ namespace WebDienThoai.DAL
             return list;
         }
 
+        // ===== SANPHAM cho combobox =====
+        public List<SanPhamNhapDto> SanPham_ListForNhap()
+        {
+            var list = new List<SanPhamNhapDto>();
+            const string sql = @"
+SELECT MASP, MALOAI, TENSP, GIABAN, ANH
+FROM dbo.SANPHAM
+ORDER BY MASP DESC;";
+
+            using (var conn = new SqlConnection(_cs))
+            using (var cmd = new SqlCommand(sql, conn))
+            {
+                conn.Open();
+                using (var rd = cmd.ExecuteReader())
+                {
+                    while (rd.Read())
+                    {
+                        list.Add(new SanPhamNhapDto
+                        {
+                            MASP = Convert.ToInt32(rd["MASP"]),
+                            MALOAI = rd["MALOAI"] == DBNull.Value ? 0 : Convert.ToInt32(rd["MALOAI"]),
+                            TENSP = rd["TENSP"]?.ToString(),
+                            GIABAN = rd["GIABAN"] == DBNull.Value ? 0m : Convert.ToDecimal(rd["GIABAN"]),
+                            ANH = rd["ANH"] == DBNull.Value ? "" : rd["ANH"].ToString()
+                        });
+                    }
+                }
+            }
+            return list;
+        }
+
+        // ===== LOAI SP cho combobox (tự dò table) =====
+        public List<LoaiSanPhamDto> LoaiSanPham_List()
+        {
+            var list = new List<LoaiSanPhamDto>();
+
+            const string sql = @"
+IF OBJECT_ID('dbo.LOAISP') IS NOT NULL
+BEGIN
+    SELECT MALOAI, TENLOAI FROM dbo.LOAISP ORDER BY MALOAI;
+END
+ELSE IF OBJECT_ID('dbo.LOAISANPHAM') IS NOT NULL
+BEGIN
+    SELECT MALOAI, TENLOAI FROM dbo.LOAISANPHAM ORDER BY MALOAI;
+END
+ELSE
+BEGIN
+    SELECT DISTINCT CAST(MALOAI AS INT) AS MALOAI,
+           CAST(MALOAI AS NVARCHAR(100)) AS TENLOAI
+    FROM dbo.SANPHAM
+    WHERE MALOAI IS NOT NULL
+    ORDER BY CAST(MALOAI AS INT);
+END";
+
+            using (var conn = new SqlConnection(_cs))
+            using (var cmd = new SqlCommand(sql, conn))
+            {
+                conn.Open();
+                using (var rd = cmd.ExecuteReader())
+                {
+                    while (rd.Read())
+                    {
+                        list.Add(new LoaiSanPhamDto
+                        {
+                            MALOAI = Convert.ToInt32(rd["MALOAI"]),
+                            TENLOAI = rd["TENLOAI"]?.ToString()
+                        });
+                    }
+                }
+            }
+
+            return list;
+        }
+
+        // ===== Tạo mới sản phẩm (MASP tự sinh) =====
+        // NOTE: GIABAN cho phép = 0 vì trigger sẽ tự cập nhật sau khi nhập hàng.
+        public int SanPham_Create(int maLoai, string tenSp, decimal giaBan, string anhFile)
+        {
+            if (string.IsNullOrWhiteSpace(tenSp)) throw new ArgumentException("TENSP rỗng.");
+            if (maLoai <= 0) throw new ArgumentException("MALOAI không hợp lệ.");
+            if (giaBan < 0) throw new ArgumentException("GIABAN không hợp lệ."); // ✅ cho phép 0
+
+            const string sql = @"
+INSERT INTO dbo.SANPHAM (MALOAI, TENSP, GIABAN, ANH)
+VALUES (@MALOAI, @TENSP, @GIABAN, @ANH);
+SELECT CAST(SCOPE_IDENTITY() AS INT);";
+
+            using (var conn = new SqlConnection(_cs))
+            using (var cmd = new SqlCommand(sql, conn))
+            {
+                cmd.Parameters.Add("@MALOAI", SqlDbType.Int).Value = maLoai;
+                cmd.Parameters.Add("@TENSP", SqlDbType.NVarChar, 200).Value = tenSp.Trim();
+
+                var pGia = cmd.Parameters.Add("@GIABAN", SqlDbType.Decimal);
+                pGia.Precision = 18;
+                pGia.Scale = 2;
+                pGia.Value = giaBan; // có thể = 0
+
+                cmd.Parameters.Add("@ANH", SqlDbType.NVarChar, 255).Value =
+                    string.IsNullOrWhiteSpace(anhFile) ? (object)DBNull.Value : anhFile.Trim();
+
+                conn.Open();
+                return (int)cmd.ExecuteScalar();
+            }
+        }
+
         // ===== TONKHO =====
         public List<TonKho> GetTonKho(string maKho = null)
         {
             var list = new List<TonKho>();
-            var sql = @"SELECT MASP, MAKHO, SOLUONG FROM dbo.TONKHO
+            var sql = @"SELECT MASP, MAKHO, SOLUONG
+                        FROM dbo.TONKHO
                         WHERE (@MAKHO IS NULL OR MAKHO = @MAKHO)
                         ORDER BY MAKHO, MASP";
 
@@ -74,14 +198,14 @@ namespace WebDienThoai.DAL
             var list = new List<PhieuNhap>();
 
             var sql = @"
-                        SELECT pn.MAPHIEUNHAP, pn.ID, pn.NGAYNHAP, pn.NHACUNGCAP, pn.TONGGIA, pn.MAKHO,
-                               k.TENKHO
-                        FROM dbo.PHIEUNHAP pn
-                        LEFT JOIN dbo.KHO k ON k.MAKHO = pn.MAKHO
-                        WHERE (@MAKHO IS NULL OR pn.MAKHO = @MAKHO)
-                          AND (@TUNGAY IS NULL OR pn.NGAYNHAP >= @TUNGAY)
-                          AND (@DENNGAY IS NULL OR pn.NGAYNHAP < DATEADD(DAY, 1, @DENNGAY))
-                        ORDER BY pn.NGAYNHAP DESC, pn.MAPHIEUNHAP DESC";
+SELECT pn.MAPHIEUNHAP, pn.ID, pn.NGAYNHAP, pn.NHACUNGCAP, pn.TONGGIA, pn.MAKHO,
+       k.TENKHO
+FROM dbo.PHIEUNHAP pn
+LEFT JOIN dbo.KHO k ON k.MAKHO = pn.MAKHO
+WHERE (@MAKHO IS NULL OR pn.MAKHO = @MAKHO)
+  AND (@TUNGAY IS NULL OR pn.NGAYNHAP >= @TUNGAY)
+  AND (@DENNGAY IS NULL OR pn.NGAYNHAP < DATEADD(DAY, 1, @DENNGAY))
+ORDER BY pn.NGAYNHAP DESC, pn.MAPHIEUNHAP DESC";
 
             using (var conn = new SqlConnection(_cs))
             using (var cmd = new SqlCommand(sql, conn))
@@ -98,12 +222,12 @@ namespace WebDienThoai.DAL
                         list.Add(new PhieuNhap
                         {
                             MAPHIEUNHAP = Convert.ToInt32(rd["MAPHIEUNHAP"]),
-                            ID = rd["ID"] as string,
+                            ID = rd["ID"] == DBNull.Value ? null : rd["ID"].ToString(),
                             NGAYNHAP = Convert.ToDateTime(rd["NGAYNHAP"]),
                             NHACUNGCAP = rd["NHACUNGCAP"].ToString(),
                             TONGGIA = Convert.ToDecimal(rd["TONGGIA"]),
                             MAKHO = rd["MAKHO"].ToString(),
-                            TENKHO = rd["TENKHO"]?.ToString()
+                            TENKHO = rd["TENKHO"] == DBNull.Value ? null : rd["TENKHO"].ToString()
                         });
                     }
                 }
@@ -115,11 +239,11 @@ namespace WebDienThoai.DAL
         public PhieuNhap GetPhieuNhapById(int id)
         {
             var sql = @"
-                        SELECT pn.MAPHIEUNHAP, pn.ID, pn.NGAYNHAP, pn.NHACUNGCAP, pn.TONGGIA, pn.MAKHO,
-                               k.TENKHO
-                        FROM dbo.PHIEUNHAP pn
-                        LEFT JOIN dbo.KHO k ON k.MAKHO = pn.MAKHO
-                        WHERE pn.MAPHIEUNHAP = @ID";
+SELECT pn.MAPHIEUNHAP, pn.ID, pn.NGAYNHAP, pn.NHACUNGCAP, pn.TONGGIA, pn.MAKHO,
+       k.TENKHO
+FROM dbo.PHIEUNHAP pn
+LEFT JOIN dbo.KHO k ON k.MAKHO = pn.MAKHO
+WHERE pn.MAPHIEUNHAP = @ID";
 
             using (var conn = new SqlConnection(_cs))
             using (var cmd = new SqlCommand(sql, conn))
@@ -133,12 +257,12 @@ namespace WebDienThoai.DAL
                     return new PhieuNhap
                     {
                         MAPHIEUNHAP = Convert.ToInt32(rd["MAPHIEUNHAP"]),
-                        ID = rd["ID"] as string,
+                        ID = rd["ID"] == DBNull.Value ? null : rd["ID"].ToString(),
                         NGAYNHAP = Convert.ToDateTime(rd["NGAYNHAP"]),
                         NHACUNGCAP = rd["NHACUNGCAP"].ToString(),
                         TONGGIA = Convert.ToDecimal(rd["TONGGIA"]),
                         MAKHO = rd["MAKHO"].ToString(),
-                        TENKHO = rd["TENKHO"]?.ToString()
+                        TENKHO = rd["TENKHO"] == DBNull.Value ? null : rd["TENKHO"].ToString()
                     };
                 }
             }
@@ -174,14 +298,11 @@ namespace WebDienThoai.DAL
             return list;
         }
 
-        // đổi signature: idNguoiTao int? , maKho int
+        // ===== Tạo phiếu nhập + cập nhật TONKHO (UPSERT) =====
         public int CreatePhieuNhap(int idNguoiTao, DateTime ngayNhap, string nhaCungCap, int maKho, List<ChiTietPN> items)
         {
-            if (items == null || items.Count == 0)
-                throw new ArgumentException("Items rỗng.");
-
-            if (string.IsNullOrWhiteSpace(nhaCungCap))
-                throw new ArgumentException("Nhà cung cấp rỗng.");
+            if (items == null || items.Count == 0) throw new ArgumentException("Items rỗng.");
+            if (string.IsNullOrWhiteSpace(nhaCungCap)) throw new ArgumentException("Nhà cung cấp rỗng.");
 
             decimal tongGia = 0m;
             foreach (var it in items)
@@ -190,8 +311,6 @@ namespace WebDienThoai.DAL
             using (var conn = new SqlConnection(_cs))
             {
                 conn.Open();
-
-                // đảm bảo rollback khi gặp lỗi SQL
                 using (var cmdXact = new SqlCommand("SET XACT_ABORT ON;", conn))
                     cmdXact.ExecuteNonQuery();
 
@@ -199,18 +318,16 @@ namespace WebDienThoai.DAL
                 {
                     try
                     {
-                        // 1) insert PHIEUNHAP
                         const string insertPN = @"
-                                                INSERT INTO dbo.PHIEUNHAP (ID, NGAYNHAP, NHACUNGCAP, TONGGIA, MAKHO)
-                                                VALUES (@ID, @NGAYNHAP, @NCC, @TONGGIA, @MAKHO);
-                                                SELECT CAST(SCOPE_IDENTITY() AS INT);";
+INSERT INTO dbo.PHIEUNHAP (ID, NGAYNHAP, NHACUNGCAP, TONGGIA, MAKHO)
+VALUES (@ID, @NGAYNHAP, @NCC, @TONGGIA, @MAKHO);
+SELECT CAST(SCOPE_IDENTITY() AS INT);";
 
                         int newId;
                         using (var cmd = new SqlCommand(insertPN, conn, tx))
                         {
                             cmd.Parameters.Add("@ID", SqlDbType.Int).Value = idNguoiTao;
                             cmd.Parameters.Add("@NGAYNHAP", SqlDbType.DateTime).Value = ngayNhap;
-
                             cmd.Parameters.Add("@NCC", SqlDbType.NVarChar, 100).Value = nhaCungCap.Trim();
 
                             var pTong = cmd.Parameters.Add("@TONGGIA", SqlDbType.Decimal);
@@ -223,14 +340,13 @@ namespace WebDienThoai.DAL
                             newId = (int)cmd.ExecuteScalar();
                         }
 
-                        // 2) insert CHITIETPN + 3) upsert TONKHO
                         const string insertCT = @"
 INSERT INTO dbo.CHITIETPN (MAPHIEUNHAP, MASP, SOLUONG, GIANHAP)
 VALUES (@MAPN, @MASP, @SL, @GIA);";
 
-                        const string upsertTon = @"
-IF EXISTS (SELECT 1 FROM dbo.TONKHO WHERE MAKHO = @MAKHO AND MASP = @MASP)
-    UPDATE dbo.TONKHO SET SOLUONG = SOLUONG + @SL WHERE MAKHO = @MAKHO AND MASP = @MASP;
+                        const string upsertTonKho = @"
+IF EXISTS (SELECT 1 FROM dbo.TONKHO WITH (UPDLOCK, HOLDLOCK) WHERE MASP = @MASP AND MAKHO = @MAKHO)
+    UPDATE dbo.TONKHO SET SOLUONG = SOLUONG + @SL WHERE MASP = @MASP AND MAKHO = @MAKHO;
 ELSE
     INSERT INTO dbo.TONKHO (MASP, MAKHO, SOLUONG) VALUES (@MASP, @MAKHO, @SL);";
 
@@ -261,12 +377,12 @@ ELSE
                                 cmd.ExecuteNonQuery();
                             }
 
-                            using (var cmd = new SqlCommand(upsertTon, conn, tx))
+                            using (var cmdTk = new SqlCommand(upsertTonKho, conn, tx))
                             {
-                                cmd.Parameters.Add("@MAKHO", SqlDbType.Int).Value = maKho;
-                                cmd.Parameters.Add("@MASP", SqlDbType.Int).Value = maspInt;
-                                cmd.Parameters.Add("@SL", SqlDbType.Int).Value = it.SOLUONG;
-                                cmd.ExecuteNonQuery();
+                                cmdTk.Parameters.Add("@MASP", SqlDbType.Int).Value = maspInt;
+                                cmdTk.Parameters.Add("@MAKHO", SqlDbType.Int).Value = maKho;
+                                cmdTk.Parameters.Add("@SL", SqlDbType.Int).Value = it.SOLUONG;
+                                cmdTk.ExecuteNonQuery();
                             }
                         }
 
@@ -275,12 +391,14 @@ ELSE
                     }
                     catch
                     {
-                        try { tx.Rollback(); } catch { /* ignore rollback errors */ }
+                        try { tx.Rollback(); } catch { }
                         throw;
                     }
                 }
             }
         }
+
+        // ==== DonHangKho giữ nguyên nếu đang dùng ====
         public List<DonHangKhoItemVM> DonHangKho_List(int? maHD, DateTime? tuNgay, DateTime? denNgay, string trangThai)
         {
             var list = new List<DonHangKhoItemVM>();
@@ -329,6 +447,27 @@ ELSE
                 conn.Open();
                 cmd.ExecuteNonQuery();
             }
+        }
+
+        // ==== Thống kê doanh thu theo ngày ====
+        public List<DoanhThuRowVM> ThongKeDoanhThu(DateTime? tuNgay, DateTime? denNgay, string trangThai = "Đã giao")
+        {
+            var rows = new Dictionary<DateTime, DoanhThuRowVM>();
+            var orders = DonHangKho_List(null, tuNgay, denNgay, trangThai);
+            foreach (var o in orders)
+            {
+                var day = o.NgayLap.Date;
+                if (!rows.TryGetValue(day, out var r))
+                {
+                    r = new DoanhThuRowVM { Ngay = day, DoanhThu = 0m, SoDon = 0 };
+                    rows[day] = r;
+                }
+                r.DoanhThu += o.ThanhTien;
+                r.SoDon += 1;
+            }
+            var list = new List<DoanhThuRowVM>(rows.Values);
+            list.Sort((a, b) => a.Ngay.CompareTo(b.Ngay));
+            return list;
         }
     }
 }

@@ -1,0 +1,163 @@
+﻿@model WebDienThoai.Models.ViewModels.ThongKeDoanhThuVM
+@using System.Globalization
+@{
+    ViewBag.Title = "Thống kê doanh thu";
+    Layout = "~/Views/Shared/_LayoutQT.cshtml";
+    var vi = new CultureInfo("vi-VN");
+    Func<decimal,string> fmtVnd = v => String.Format(vi, "{0:n0} đ", v);
+}
+<style>
+    .stat-card{background:#fff;border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.08);padding:18px}
+    .stat-title{font-size:14px;color:#6c757d;margin-bottom:6px}
+    .stat-value{font-size:22px;font-weight:800}
+    .stat-sub{font-size:12px;color:#6c757d}
+    .chart-wrap{background:#fff;border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.08);padding:16px}
+    .toggle .btn{border-radius:999px}
+</style>
+<div class="container py-3">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h3 class="mb-0">Thống kê doanh thu</h3>
+        <div class="d-flex gap-2">
+            <button id="btnExport" class="btn btn-outline-secondary">Xuất CSV</button>
+        </div>
+    </div>
+    <form method="get" class="row g-2 mb-3">
+        <div class="col-sm-3">
+            <div class="input-group">
+                <span class="input-group-text"><i class="fa-regular fa-calendar"></i></span>
+                <input type="date" name="tuNgay" value="@(Model.TuNgay?.ToString("yyyy-MM-dd"))" class="form-control" />
+            </div>
+        </div>
+        <div class="col-sm-3">
+            <div class="input-group">
+                <span class="input-group-text"><i class="fa-regular fa-calendar"></i></span>
+                <input type="date" name="denNgay" value="@(Model.DenNgay?.ToString("yyyy-MM-dd"))" class="form-control" />
+            </div>
+        </div>
+        <div class="col-sm-2">
+            <button class="btn btn-primary w-100" type="submit">Lọc</button>
+        </div>
+        <div class="col-sm-4 d-flex align-items-center justify-content-end toggle">
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-primary active" id="viewDaily">Theo ngày</button>
+                <button type="button" class="btn btn-outline-primary" id="viewMonthly">Theo tháng</button>
+            </div>
+        </div>
+    </form>
+
+    @{ var tong = Model.TongDoanhThu; var tongDon = Model.TongDon; var avg = tongDon==0?0: tong/tongDon; }
+    <div class="row g-3 mb-3">
+        <div class="col-sm-4">
+            <div class="stat-card">
+                <div class="stat-title">Tổng đơn</div>
+                <div class="stat-value">@tongDon</div>
+                <div class="stat-sub">Trong khoảng thời gian đã chọn</div>
+            </div>
+        </div>
+        <div class="col-sm-4">
+            <div class="stat-card">
+                <div class="stat-title">Tổng doanh thu</div>
+                <div class="stat-value">@fmtVnd(tong)</div>
+                <div class="stat-sub">Đã bao gồm tất cả đơn đã giao</div>
+            </div>
+        </div>
+        <div class="col-sm-4">
+            <div class="stat-card">
+                <div class="stat-title">Doanh thu trung bình/đơn</div>
+                <div class="stat-value">@fmtVnd(avg)</div>
+                <div class="stat-sub">Tổng doanh thu / Tổng đơn</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="chart-wrap mb-3">
+        <canvas id="revenueChart" height="120"></canvas>
+    </div>
+
+    <table id="tblDaily" class="table table-hover table-bordered table-sm">
+        <thead class="table-light">
+            <tr>
+                <th style="width:180px">Ngày</th>
+                <th>Số đơn</th>
+                <th>Doanh thu</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var r in Model.Rows)
+        {
+            <tr>
+                <td>@r.Ngay.ToString("dd/MM/yyyy")</td>
+                <td>@r.SoDon</td>
+                <td>@fmtVnd(r.DoanhThu)</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+
+    <table id="tblMonthly" class="table table-hover table-bordered table-sm" style="display:none">
+        <thead class="table-light">
+            <tr>
+                <th style="width:180px">Tháng</th>
+                <th>Số đơn</th>
+                <th>Doanh thu</th>
+            </tr>
+        </thead>
+        <tbody>
+        @{ var monthGroups = Model.Rows
+                .GroupBy(x => new DateTime(x.Ngay.Year, x.Ngay.Month, 1))
+                .OrderBy(g => g.Key);
+           foreach (var g in monthGroups)
+           {
+               var sum = g.Sum(x => x.DoanhThu);
+               var cnt = g.Sum(x => x.SoDon);
+               <tr>
+                   <td>@g.Key.ToString("MM/yyyy")</td>
+                   <td>@cnt</td>
+                   <td>@fmtVnd(sum)</td>
+               </tr>
+           }
+        }
+        </tbody>
+    </table>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    (function(){
+        const rows = [
+            @for (int i = 0; i < Model.Rows.Count; i++) {
+                var r = Model.Rows[i];
+                @: { d: '@r.Ngay.ToString("yyyy-MM-dd")', v: @Convert.ToInt64(r.DoanhThu), c: @r.SoDon },
+                @:
+            }
+        ];
+        const labels = rows.map(x=> x.d);
+        const data = rows.map(x=> x.v);
+        const ma = data.map((_,i)=>{const s=Math.max(0,i-2),e=i+1;const arr=data.slice(s,e);const avg=arr.reduce((a,b)=>a+b,0)/arr.length;return Math.round(avg);});
+        const ctx = document.getElementById('revenueChart');
+        new Chart(ctx,{type:'line',data:{labels, datasets:[
+            {label:'Doanh thu', data, borderColor:'#0d6efd', backgroundColor:'rgba(13,110,253,.15)', tension:.3, fill:true},
+            {label:'Xu hướng ', data: ma, borderColor:'#198754', tension:.3, pointRadius:0}
+        ]}, options:{
+            plugins:{legend:{display:true}, tooltip:{callbacks:{label:(ctx)=>{
+                const v=ctx.parsed.y||0; return new Intl.NumberFormat('vi-VN',{maximumFractionDigits:0}).format(v)+ ' đ';}}}},
+            scales:{x:{grid:{display:false}}, y:{ticks:{callback:(value)=> new Intl.NumberFormat('vi-VN',{maximumFractionDigits:0}).format(value)+' đ'}, beginAtZero:true}}
+        }});
+
+        const btnD=document.getElementById('viewDaily');
+        const btnM=document.getElementById('viewMonthly');
+        const tblD=document.getElementById('tblDaily');
+        const tblM=document.getElementById('tblMonthly');
+        btnD.addEventListener('click',()=>{btnD.classList.add('active');btnM.classList.remove('active');tblD.style.display='';tblM.style.display='none';});
+        btnM.addEventListener('click',()=>{btnM.classList.add('active');btnD.classList.remove('active');tblD.style.display='none';tblM.style.display='';});
+
+        document.getElementById('btnExport').addEventListener('click',function(){
+            const header=['Ngày','Số đơn','Doanh thu (đ)'];
+            const body=rows.map(r=> `${r.d},${r.c},${r.v}`);
+            const csv=[header.join(',') ,...body].join('\n');
+            const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+            const url=URL.createObjectURL(blob);
+            const a=document.createElement('a');a.href=url;a.download='doanhthu.csv';a.click();URL.revokeObjectURL(url);
+        });
+    })();
+</script>

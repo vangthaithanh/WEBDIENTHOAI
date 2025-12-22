@@ -5,7 +5,7 @@
 }
 
 <div class="bg-white p-4 rounded-3 shadow-sm">
-    <div class="d-flex flex-column " style="min-height: 80vh;">
+    <div class="d-flex flex-column" style="min-height: 80vh;">
         <h2>Danh sách phiếu nhập</h2>
 
         @using (Html.BeginForm("PhieuNhap", "QuanLyKho", FormMethod.Get))
@@ -24,11 +24,13 @@
                 </div>
 
                 <div class="col-md-3">
-                    <input class="form-control" type="date" name="tuNgay" value="@(Model.TuNgay.HasValue ? Model.TuNgay.Value.ToString("yyyy-MM-dd") : "")" />
+                    <input class="form-control" type="date" name="tuNgay"
+                           value="@(Model.TuNgay.HasValue ? Model.TuNgay.Value.ToString("yyyy-MM-dd") : "")" />
                 </div>
 
                 <div class="col-md-3">
-                    <input class="form-control" type="date" name="denNgay" value="@(Model.DenNgay.HasValue ? Model.DenNgay.Value.ToString("yyyy-MM-dd") : "")" />
+                    <input class="form-control" type="date" name="denNgay"
+                           value="@(Model.DenNgay.HasValue ? Model.DenNgay.Value.ToString("yyyy-MM-dd") : "")" />
                 </div>
 
                 <div class="col-md-2">
@@ -50,7 +52,8 @@
                     <th>Nhà cung cấp</th>
                     <th>Kho</th>
                     <th class="text-right">Tổng giá</th>
-                    <th></th>
+                    <th class="text-right">Xuất HĐ</th>
+                    <th class="text-right"></th>
                 </tr>
             </thead>
             <tbody>
@@ -65,12 +68,28 @@
                             {<span>- @p.TENKHO</span>}
                         </td>
                         <td class="text-right">@p.TONGGIA.ToString("N0")</td>
+
                         <td class="text-right">
-                            @Html.ActionLink("Chi tiết", "ChiTietPhieuNhap", new { id = p.MAPHIEUNHAP }, new { @class = "btn btn-xs btn-info" })
+                            <button type="button" class="btn btn-xs btn-success"
+                                    onclick="xuatPhieuNhap(@p.MAPHIEUNHAP)">
+                                Xuất hóa đơn
+                            </button>
+                        </td>
+
+                        <td class="text-right">
+                            @Html.ActionLink("Chi tiết", "ChiTietPhieuNhap", new { id = p.MAPHIEUNHAP },
+                                new { @class = "btn btn-xs btn-info" })
                         </td>
                     </tr>
                 }
             </tbody>
         </table>
     </div>
-</div> 
+</div>
+
+<script>
+    function xuatPhieuNhap(id) {
+        var url = '@Url.Action("InPhieuNhap", "QuanLyKho")' + '?id=' + id;
+        window.open(url, '_blank', 'width=900,height=650');
+    }
+</script>

@@ -4,6 +4,8 @@ using System.ComponentModel.DataAnnotations;
 using System.Configuration;
 using System.Data;
 using System.Data.SqlClient;
+using System.Net;
+using System.Net.Mail;
 using System.Web.Mvc;
 using WebDienThoai.Models;
 
@@ -424,6 +426,116 @@ namespace WebDienThoai.Controllers
             string tentk = Session["UserName"].ToString();
             var vm = GetUserProfile(tentk) ?? new ThongTinNguoiDung();
             return PartialView("_ThongTinCN", vm);
+        }
+
+        [HttpGet]
+        public ActionResult ForgotPassword()
+        {
+            ViewBag.Breadcrumb = "Quên mật khẩu";
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult ForgotPassword(ForgotPasswordViewModel vm)
+        {
+            if (!ModelState.IsValid) return View(vm);
+
+            try
+            {
+                // Generate OTP first so it is available after DB operations
+                var otp = new Random().Next(100000, 999999).ToString();
+
+                using (var conn = new SqlConnection(_connLogin))
+                {
+                    conn.Open();
+
+                    // 1) verify username + email
+                    using (var checkCmd = new SqlCommand("dbo.usp_Account_FindUserByUserNameEmail", conn))
+                    {
+                        checkCmd.CommandType = CommandType.StoredProcedure;
+                        checkCmd.Parameters.AddWithValue("@TENTK", vm.UserName);
+                        checkCmd.Parameters.AddWithValue("@EMAIL", vm.Email);
+                        var exists = Convert.ToInt32(checkCmd.ExecuteScalar() ?? 0) == 1;
+                        if (!exists)
+                        {
+                            ModelState.AddModelError("", "Không tìm thấy tài khoản khớp với email.");
+                            return View(vm);
+                        }
+                    }
+
+                    // 2) persist OTP via proc
+                    using (var otpCmd = new SqlCommand("dbo.usp_Account_SetResetOtp", conn))
+                    {
+                        otpCmd.CommandType = CommandType.StoredProcedure;
+                        otpCmd.Parameters.AddWithValue("@TENTK", vm.UserName);
+                        otpCmd.Parameters.AddWithValue("@OTP", otp);
+                        otpCmd.Parameters.AddWithValue("@EXPIRES_MINUTES", 10);
+                        otpCmd.ExecuteNonQuery();
+                    }
+                }
+
+                EmailService.Send(vm.Email, "OTP đặt lại mật khẩu", $"Mã OTP: {otp}");
+                TempData["Info"] = "OTP đã được gửi tới email.";
+                return RedirectToAction("ResetPasswordOtp", new { userName = vm.UserName });
+            }
+            catch (Exception ex)
+            {
+                ModelState.AddModelError("", "Lỗi hệ thống: " + ex.Message);
+                return View(vm);
+            }
+        }
+
+        [HttpGet]
+        public ActionResult ResetPasswordOtp(string userName)
+        {
+            var model = new ResetPasswordWithOtpViewModel { UserName = userName };
+            return View(model);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult ResetPasswordOtp(ResetPasswordWithOtpViewModel model)
+        {
+            if (!ModelState.IsValid)
+            {
+                return View(model);
+            }
+
+            try
+            {
+                using (var conn = new SqlConnection(_connLogin))
+                using (var cmd = new SqlCommand("dbo.usp_Account_ResetPassword_WithOtp", conn))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.AddWithValue("@TENTK", model.UserName);
+                    cmd.Parameters.AddWithValue("@OTP", model.Otp);
+                    cmd.Parameters.AddWithValue("@NEWPASS", model.NewPassword);
+                    conn.Open();
+                    using (var rd = cmd.ExecuteReader())
+                    {
+                        if (!rd.Read())
+                        {
+                            ModelState.AddModelError("", "Đặt lại mật khẩu thất bại.");
+                            return View(model);
+                        }
+                        int code = Convert.ToInt32(rd["Code"]);
+                        string msg = rd["Msg"].ToString();
+                        if (code != 0)
+                        {
+                            ModelState.AddModelError("", msg);
+                            return View(model);
+                        }
+                        TempData["Success"] = msg;
+                        return RedirectToAction("Login");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ModelState.AddModelError("", "Lỗi hệ thống: " + ex.Message);
+                return View(model);
+            }
         }
     }
 

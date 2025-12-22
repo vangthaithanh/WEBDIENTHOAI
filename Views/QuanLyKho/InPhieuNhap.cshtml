@@ -1,0 +1,194 @@
+﻿@model WebDienThoai.Models.ViewModels.PhieuNhapDetailVM
+@{
+    Layout = null;
+    var tong = Model.ChiTiet?.Sum(x => x.SOLUONG * x.GIANHAP) ?? 0;
+    var nguoiLap = (Session["HoTen"] ?? Session["UserName"] ?? Model.PhieuNhap.ID ?? "").ToString();
+}
+
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Phiếu nhập kho - @Model.PhieuNhap.MAPHIEUNHAP</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 13px;
+            color: #111;
+        }
+
+        .a4 {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 12mm;
+            margin: 0 auto;
+        }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .muted {
+            color: #666;
+        }
+
+        h1 {
+            font-size: 20px;
+            margin: 8px 0 2px 0;
+            text-align: center;
+        }
+
+        .sub {
+            text-align: center;
+            margin-bottom: 12px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th, td {
+            border: 1px solid #333;
+            padding: 6px;
+        }
+
+        th {
+            background: #f2f2f2;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .no-border td {
+            border: none;
+            padding: 2px 0;
+        }
+
+        .sign {
+            margin-top: 30px;
+        }
+
+            .sign .col {
+                width: 33.33%;
+                text-align: center;
+            }
+
+            .sign .title {
+                font-weight: bold;
+                margin-bottom: 70px;
+            }
+
+        @@media print {
+            .no-print {
+                display: none;
+            }
+
+            .a4 {
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="a4">
+        <div class="row">
+            <div>
+                <div style="font-weight:bold; font-size:14px;">CÔNG TY / CỬA HÀNG: WebĐiệnThoại</div>
+                <div class="muted">Địa chỉ: ....................................................</div>
+                <div class="muted">Điện thoại: ..................................................</div>
+            </div>
+            <div class="text-right">
+                <div><b>Số phiếu:</b> PN-@Model.PhieuNhap.MAPHIEUNHAP</div>
+                <div><b>Ngày nhập:</b> @Model.PhieuNhap.NGAYNHAP.ToString("dd/MM/yyyy HH:mm")</div>
+            </div>
+        </div>
+
+        <h1>PHIẾU NHẬP KHO</h1>
+        <div class="sub muted">Biên bản nhập hàng / chứng từ nhập kho</div>
+
+        <table class="no-border">
+            <tr>
+                <td><b>Nhà cung cấp:</b> @Model.PhieuNhap.NHACUNGCAP</td>
+                <td class="text-right">
+                    <b>Kho:</b> @Model.PhieuNhap.MAKHO
+                    @(!string.IsNullOrWhiteSpace(Model.PhieuNhap.TENKHO) ? ("- " + Model.PhieuNhap.TENKHO) : "")
+                </td>
+            </tr>
+            <tr>
+                <td><b>Người lập:</b> @nguoiLap</td>
+                <td class="text-right"><b>Ghi chú:</b> ........................................</td>
+            </tr>
+        </table>
+
+        <table>
+            <thead>
+                <tr>
+                    <th class="text-center" style="width:50px;">STT</th>
+                    <th class="text-center" style="width:100px;">Mã SP</th>
+                    <th>Tên hàng</th>
+                    <th class="text-center" style="width:90px;">Số lượng</th>
+                    <th class="text-right" style="width:120px;">Giá nhập</th>
+                    <th class="text-right" style="width:140px;">Thành tiền</th>
+                </tr>
+            </thead>
+            <tbody>
+                @{
+                    int stt = 1;
+                    foreach (var c in Model.ChiTiet)
+                    {
+                        var thanhTien = c.SOLUONG * c.GIANHAP;
+                        <tr>
+                            <td class="text-center">@stt</td>
+                            <td class="text-center">@c.MASP</td>
+                            <td class="muted">—</td>
+                            <td class="text-center">@c.SOLUONG</td>
+                            <td class="text-right">@c.GIANHAP.ToString("N0")</td>
+                            <td class="text-right">@thanhTien.ToString("N0")</td>
+                        </tr>
+                        stt++;
+                    }
+                }
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th colspan="5" class="text-right">Tổng cộng</th>
+                    <th class="text-right">@tong.ToString("N0")</th>
+                </tr>
+            </tfoot>
+        </table>
+
+        <div class="sign row">
+            <div class="col">
+                <div class="title">Người lập phiếu</div>
+                <div class="muted">(Ký, ghi rõ họ tên)</div>
+            </div>
+            <div class="col">
+                <div class="title">Thủ kho</div>
+                <div class="muted">(Ký, ghi rõ họ tên)</div>
+            </div>
+            <div class="col">
+                <div class="title">Nhà cung cấp</div>
+                <div class="muted">(Ký, ghi rõ họ tên)</div>
+            </div>
+        </div>
+
+        <div class="no-print" style="margin-top:20px; text-align:right;">
+            <button onclick="window.print()">In / Xuất PDF</button>
+            <button onclick="window.close()">Đóng</button>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function () { window.print(); };
+    </script>
+</body>
+</html>

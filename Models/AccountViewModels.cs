@@ -74,5 +74,7 @@ namespace WebDienThoai.Models
         public string Email { get; set; }
         public string ChucVu { get; set; }
         public DateTime? NgayVaoLam { get; set; }
+        public string RoleCode { get; set; }
     }
+
 }

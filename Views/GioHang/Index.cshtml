@@ -2,12 +2,18 @@
 @{
     ViewBag.Title = "Giỏ hàng";
     Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var tenKhach = "";
+    try
+    {
+        tenKhach = (Session["TENKH"] ?? Session["HoTen"] ?? User.Identity.Name ?? "").ToString();
+    }
+    catch { tenKhach = ""; }
 }
 
 <div class="container mt-4">
     @Html.Partial("_ResultPopup")
 
-    @* Thông báo *@
     @if (TempData["Success"] != null)
     {
         <div class="alert alert-success">@TempData["Success"]</div>
@@ -49,11 +55,17 @@
             <div class="d-flex flex-column gap-3">
                 @foreach (var it in Model)
                 {
-                    <div class="bg-white p-3 p-md-4 rounded-3 shadow-sm cart-item d-flex align-items-center gap-3" data-masp="@it.MASP" data-price="@it.DONGIA">
+                    <div class="bg-white p-3 p-md-4 rounded-3 shadow-sm cart-item d-flex align-items-center gap-3"
+                         data-masp="@it.MASP"
+                         data-price="@it.DONGIA">
 
                         <div class="flex-shrink-0">
                             <label class="custom-checkbox">
-                                <input type="checkbox" id="chkAll" checked name="selectedItems" value="@it.MASP" checked>
+                                <input type="checkbox"
+                                       class="chk-item"
+                                       name="selectedItems"
+                                       value="@it.MASP"
+                                       checked />
                                 <span class="checkmark"></span>
                             </label>
                         </div>
@@ -84,8 +96,10 @@
                                    title="Xóa sản phẩm" style="color: #333 !important;">
                                     <i class="fas fa-trash-alt fs-5"></i>
                                 </a>
-                                @*cập nhật sản phẩm*@
-                                <form method="post" action="@Url.Action("Update", "GioHang")" class="quantity-group d-flex align-items-center bg-light rounded" style="background-color: #f0f0f0; border-radius: 4px;">
+
+                                <form method="post" action="@Url.Action("Update", "GioHang")"
+                                      class="quantity-group d-flex align-items-center bg-light rounded"
+                                      style="background-color: #f0f0f0; border-radius: 4px;">
                                     <input type="hidden" name="masp" value="@it.MASP" />
                                     <button class="btn-qty text-secondary border-0 bg-transparent fw-bold"
                                             type="button"
@@ -115,177 +129,189 @@
                 }
             </div>
         </main>
+
+        @* ===== FOOTER: 1 FORM - 2 NÚT (COD + VNPAY) ===== *@
         <div class="cart-footer bg-white border-top py-4 px-4 px-lg-5 mt-4 shadow-sm">
             <div class="container" style="max-width: 900px;">
-                <div class="d-flex align-items-center justify-content-between">
-                    <div class="d-flex flex-column">
-                        <span class="text-secondary small">Tổng thanh toán (@Model.Count() sản phẩm):</span>
-                        <span class="fw-bold fs-5" style="color: #aa1945;">
-                            <span id="tongTienSelected">@ViewBag.TongTien.ToString("N0")</span> đ
-                        </span>
+                <div class="d-flex flex-column gap-3">
+
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="d-flex flex-column">
+                            <span class="text-secondary small">Tổng thanh toán (<span id="selectedCount">@Model.Count()</span> sản phẩm đã chọn):</span>
+                            <span class="fw-bold fs-5" style="color: #aa1945;">
+                                <span id="tongTienSelected">@ViewBag.TongTien.ToString("N0")</span> đ
+                            </span>
+                        </div>
                     </div>
 
-                    @using (Html.BeginForm("XacNhanThanhToan", "GioHang", FormMethod.Post, new { @class = "m-0 p-0", id = "payForm" }))
-                    {
-                        @Html.AntiForgeryToken()
-                        <button type="submit"
-                                id="btnPay"
-                                class="btn rounded-pill px-5 py-2 fw-bold shadow-sm"
-                                style="background-color: #aa1945; color: #fff;"
-                                onclick="return confirm('Xác nhận thanh toán?');">
-                            MUA HÀNG
-                        </button>
-                    }
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="text-secondary small" style="min-width: 130px;">Tên khách hàng:</label>
+                        <input type="text" id="buyerName" class="form-control"
+                               placeholder="Nhập tên khách hàng"
+                               value="@tenKhach" />
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-end gap-2">
+
+                        @using (Html.BeginForm("XacNhanThanhToan", "GioHang", FormMethod.Post, new { @class = "m-0 p-0", id = "payForm" }))
+                        {
+                            @Html.AntiForgeryToken()
+
+                            @* Hidden cho VNPAY (Checkout/CreatePaymentUrlVnpay nhận PaymentInformationModel) *@
+                            <input type="hidden" name="OrderType" value="other" />
+                            <input type="hidden" id="vnpAmount" name="Amount" value="0" />
+                            <input type="hidden" id="vnpOrderDesc" name="OrderDescription" value="" />
+                            <input type="hidden" id="vnpName" name="Name" value="" />
+
+                            <button type="submit"
+                                    id="btnPayCod"
+                                    class="btn rounded-pill px-5 py-2 fw-bold shadow-sm"
+                                    style="background-color: #aa1945; color: #fff;"
+                                    onclick="window.__payMode='COD'; return confirm('Xác nhận mua hàng (COD)?');">
+                                MUA HÀNG
+                            </button>
+
+                            <button type="submit"
+                                    id="btnPayVnpay"
+                                    formaction="@Url.Action("CreatePaymentUrlVnpay","Checkout")"
+                                    formmethod="post"
+                                    class="btn rounded-pill px-5 py-2 fw-bold shadow-sm ms-2"
+                                    style="background-color: #0b5ed7; color: #fff;"
+                                    onclick="window.__payMode='VNPAY'; return confirm('Thanh toán qua VNPAY?');">
+                                VNPAY
+                            </button>
+                        }
+
+                    </div>
 
                 </div>
             </div>
         </div>
     }
 </div>
+
 @section scripts {
     <script>
-        function ChonUuDai(ma, phantram) {
-            document.getElementById("UuDai_ID").value = ma;
+        function updateQuantity(masp, change) {
+            var quantityInput = document.getElementById('quantity-input-' + masp);
+            var form = quantityInput.closest('form');
+            var currentQty = parseInt(quantityInput.value) || 0;
+            var newQty = currentQty + change;
 
-            let tongGoc = parseFloat(document.getElementById("TongTienGoc").value);
-            let giam = tongGoc * phantram / 100;
-            let moi = tongGoc - giam;
-
-            document.getElementById("tienGiam").innerText = giam.toLocaleString();
-            document.getElementById("tongSauGiam").innerText = moi.toLocaleString();
-
-            $('#modalUuDai').modal('hide');
-        }
-    </script>
-}
-
-@*tham khảo để làm nút cập nhật*@
-<script>
-    function updateQuantity(masp, change) {
-        var quantityInput = document.getElementById('quantity-input-' + masp);
-        var form = quantityInput.closest('form');
-        var currentQty = parseInt(quantityInput.value) || 0;
-        var newQty = currentQty + change;
-        if (newQty < 1) {
-            if (confirm('Bạn có muốn xóa sản phẩm này khỏi giỏ hàng?')) {
-                newQty = 0;
-                quantityInput.value = newQty;
-                form.submit();
+            if (newQty < 1) {
+                if (confirm('Bạn có muốn xóa sản phẩm này khỏi giỏ hàng?')) {
+                    newQty = 0;
+                    quantityInput.value = newQty;
+                    form.submit();
+                }
+                return;
             }
-            return;
+            quantityInput.value = newQty;
+            form.submit();
         }
-        quantityInput.value = newQty;
-        form.submit();
-    }
-    // Xử lý khi nhấn Enter trong ô input
-    function handleEnterKey(event, masp) {
-        if (event.key === 'Enter' || event.keyCode === 13) {
-            event.preventDefault();
-            validateAndUpdate(masp);
-        }
-    }
-    // Kiểm tra và cập nhật khi người dùng nhập trực tiếp
-    function validateAndUpdate(masp) {
-        var quantityInput = document.getElementById('quantity-input-' + masp);
-        var form = quantityInput.closest('form');
-        var newQty = parseInt(quantityInput.value) || 0;
-        // Kiểm tra giá trị hợp lệ
-        if (newQty < 0) {
-            quantityInput.value = 1;
-            return;
-        }
-        // Nếu số lượng = 0, xác nhận xóa
-        if (newQty === 0) {
-            if (confirm('Bạn có muốn xóa sản phẩm này khỏi giỏ hàng?')) {
-                form.submit();
-            } else {
-                quantityInput.value = 1; // Đặt lại về 1 nếu người dùng hủy
+
+        function handleEnterKey(event, masp) {
+            if (event.key === 'Enter' || event.keyCode === 13) {
+                event.preventDefault();
+                validateAndUpdate(masp);
             }
-            return;
-        }
-        // Cập nhật
-        quantityInput.value = newQty;
-        form.submit();
-    }
-</script>
-<script>
-    (function () {
-        function formatVND(n) {
-            return (n || 0).toLocaleString("vi-VN");
         }
 
-        function getQtyByMasp(masp) {
-            var el = document.getElementById("quantity-input-" + masp);
-            var v = parseInt(el ? el.value : "0");
-            return isNaN(v) ? 0 : v;
+        function validateAndUpdate(masp) {
+            var quantityInput = document.getElementById('quantity-input-' + masp);
+            var form = quantityInput.closest('form');
+            var newQty = parseInt(quantityInput.value) || 0;
+
+            if (newQty < 0) {
+                quantityInput.value = 1;
+                return;
+            }
+            if (newQty === 0) {
+                if (confirm('Bạn có muốn xóa sản phẩm này khỏi giỏ hàng?')) {
+                    form.submit();
+                } else {
+                    quantityInput.value = 1;
+                }
+                return;
+            }
+            quantityInput.value = newQty;
+            form.submit();
         }
 
-        function recalcTotalSelected() {
-            var total = 0;
+        (function () {
+            window.__payMode = window.__payMode || "COD";
 
-            document.querySelectorAll(".cart-item").forEach(function (row) {
-                var chk = row.querySelector('input.chk-item[name="selectedItems"]');
-                if (!chk || !chk.checked) return;
+            function formatVND(n) {
+                return (n || 0).toLocaleString("vi-VN");
+            }
 
-                var masp = row.getAttribute("data-masp");
-                var price = parseFloat(row.getAttribute("data-price") || "0");
-                var qty = getQtyByMasp(masp);
+            function getQtyByMasp(masp) {
+                var el = document.getElementById("quantity-input-" + masp);
+                var v = parseInt(el ? el.value : "0");
+                return isNaN(v) ? 0 : v;
+            }
 
-                total += price * qty;
-            });
+            function getSelectedMasp() {
+                return Array.from(document.querySelectorAll(".chk-item:checked"))
+                    .map(function (x) { return x.value; });
+            }
 
-            var tongEl = document.getElementById("tongTienSelected");
-            if (tongEl) tongEl.textContent = formatVND(total);
-        }
+            function recalcTotalSelected() {
+                var total = 0;
+                var selectedCount = 0;
 
-        // gắn class cho checkbox item (không đổi UI)
-        document.querySelectorAll('input[type="checkbox"][name="selectedItems"]').forEach(function (c) {
-            c.classList.add("chk-item");
-        });
+                document.querySelectorAll(".cart-item").forEach(function (row) {
+                    var chk = row.querySelector('input.chk-item[name="selectedItems"]');
+                    if (!chk || !chk.checked) return;
 
-        // Tick/bỏ tick item => cập nhật tổng
-        document.querySelectorAll(".chk-item").forEach(function (chk) {
-            chk.addEventListener("change", function () {
-                recalcTotalSelected();
-                syncChkAll();
-            });
-        });
+                    selectedCount++;
 
-        // Chọn tất cả
-        var chkAll = document.getElementById("chkAll");
-        function syncChkAll() {
-            if (!chkAll) return;
-            var items = document.querySelectorAll(".chk-item");
-            if (items.length === 0) return;
-            var checkedCount = document.querySelectorAll(".chk-item:checked").length;
-            chkAll.checked = (checkedCount === items.length);
-        }
+                    var masp = row.getAttribute("data-masp");
+                    var price = parseFloat(row.getAttribute("data-price") || "0");
+                    var qty = getQtyByMasp(masp);
 
-        if (chkAll) {
-            chkAll.addEventListener("change", function () {
-                var on = chkAll.checked;
-                document.querySelectorAll(".chk-item").forEach(function (c) { c.checked = on; });
-                recalcTotalSelected();
-            });
-        }
-
-        // Trước khi submit thanh toán: nhét các masp đã tick vào form
-        var payForm = document.getElementById("payForm");
-        if (payForm) {
-            payForm.addEventListener("submit", function (e) {
-                // xóa hidden cũ
-                payForm.querySelectorAll('input[name="selectedItems"][data-generated="1"]').forEach(function (x) {
-                    x.remove();
+                    total += price * qty;
                 });
 
-                var selected = Array.from(document.querySelectorAll(".chk-item:checked"))
-                    .map(function (x) { return x.value; });
+                var tongEl = document.getElementById("tongTienSelected");
+                if (tongEl) tongEl.textContent = formatVND(total);
 
-                if (selected.length === 0) {
-                    e.preventDefault();
-                    alert("Bạn chưa chọn sản phẩm để thanh toán.");
-                    return;
-                }
+                var countEl = document.getElementById("selectedCount");
+                if (countEl) countEl.textContent = selectedCount;
+
+                return { total: total, count: selectedCount };
+            }
+
+            var chkAll = document.getElementById("chkAll");
+            function syncChkAll() {
+                if (!chkAll) return;
+                var items = document.querySelectorAll(".chk-item");
+                if (items.length === 0) return;
+
+                var checkedCount = document.querySelectorAll(".chk-item:checked").length;
+                chkAll.checked = (checkedCount === items.length);
+            }
+
+            document.querySelectorAll(".chk-item").forEach(function (chk) {
+                chk.addEventListener("change", function () {
+                    recalcTotalSelected();
+                    syncChkAll();
+                });
+            });
+
+            if (chkAll) {
+                chkAll.addEventListener("change", function () {
+                    var on = chkAll.checked;
+                    document.querySelectorAll(".chk-item").forEach(function (c) { c.checked = on; });
+                    recalcTotalSelected();
+                });
+            }
+
+            function injectSelectedItems(form) {
+                form.querySelectorAll('input[name="selectedItems"][data-generated="1"]').forEach(function (x) { x.remove(); });
+
+                var selected = getSelectedMasp();
+                if (selected.length === 0) return false;
 
                 selected.forEach(function (masp) {
                     var h = document.createElement("input");
@@ -293,25 +319,59 @@
                     h.name = "selectedItems";
                     h.value = masp;
                     h.setAttribute("data-generated", "1");
-                    payForm.appendChild(h);
+                    form.appendChild(h);
                 });
-            });
+
+                return true;
+            }
+
+            var payForm = document.getElementById("payForm");
+            if (payForm) {
+                payForm.addEventListener("submit", function (e) {
+                    if (!injectSelectedItems(payForm)) {
+                        e.preventDefault();
+                        alert("Bạn chưa chọn sản phẩm.");
+                        return;
+                    }
+
+                    // luôn recalc lại tại thời điểm submit
+                    var info = recalcTotalSelected();
+                    if (!info || info.total <= 0) {
+                        e.preventDefault();
+                        alert("Tổng thanh toán không hợp lệ.");
+                        return;
+                    }
+
+                    // Nếu bấm VNPAY -> bơm PaymentInformationModel
+                    if ((window.__payMode || "COD") === "VNPAY") {
+                        var buyerName = (document.getElementById("buyerName")?.value || "").trim();
+                        if (!buyerName) {
+                            e.preventDefault();
+                            alert("Vui lòng nhập tên khách hàng (để tạo OrderInfo trên VNPAY).");
+                            return;
+                        }
+
+                        document.getElementById("vnpAmount").value = Math.round(info.total); // int
+                        document.getElementById("vnpName").value = buyerName;
+                        document.getElementById("vnpOrderDesc").value = "Thanh toan gio hang (" + info.count + " san pham)";
+                    }
+                });
+            }
+
+            syncChkAll();
+            recalcTotalSelected();
+        })();
+    </script>
+
+    <style>
+        input[type=number]::-webkit-outer-spin-button,
+        input[type=number]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
         }
 
-        // lần đầu
-        syncChkAll();
-        recalcTotalSelected();
-    })();
-</script>
-
-<style>
-    input[type=number]::-webkit-outer-spin-button,
-    input[type=number]::-webkit-inner-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-    }
-
-    input[type=number] {
-        -moz-appearance: textfield;
-    }
-</style>
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+    </style>
+}

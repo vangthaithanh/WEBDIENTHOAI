@@ -1,14 +1,45 @@
 ﻿@model WebDienThoai.Models.ViewModels.CreatePhieuNhapVM
+@using System.Web.Mvc
+
 @{
     ViewBag.Title = "Tạo phiếu nhập";
     Layout = "~/Views/Shared/_LayoutQT.cshtml";
+
+    var spSelect = ViewBag.SanPhamSelect as List<SelectListItem> ?? new List<SelectListItem>();
+    var loaiSelect = ViewBag.LoaiSelect as List<SelectListItem> ?? new List<SelectListItem>();
+
+    var newVals = ViewBag.NewProducts as Dictionary<string, string> ?? new Dictionary<string, string>();
 }
 
+<style>
+    #tblItems th, #tblItems td {
+        vertical-align: top;
+    }
+
+    #tblItems input, #tblItems select {
+        min-width: 170px;
+    }
+
+    #tblItems .col-sl input, #tblItems .col-gianhap input {
+        min-width: 95px;
+    }
+
+    #tblItems .col-xoa {
+        width: 90px;
+        min-width: 90px;
+    }
+
+    #tblItems .text-right {
+        text-align: right;
+    }
+</style>
+
 <div class="bg-white p-4 rounded-3 shadow-sm">
-    <div class="d-flex flex-column " style="min-height: 80vh;">
+    <div class="d-flex flex-column" style="min-height: 80vh;">
         <h2>Tạo phiếu nhập</h2>
 
-        @using (Html.BeginForm("TaoPhieuNhap", "QuanLyKho", FormMethod.Post))
+        @using (Html.BeginForm("TaoPhieuNhap", "QuanLyKho", FormMethod.Post,
+            new { enctype = "multipart/form-data", id = "frmPhieuNhap" }))
         {
             @Html.AntiForgeryToken()
             @Html.ValidationSummary(true, "", new { @class = "text-danger" })
@@ -43,38 +74,121 @@
 
             <h4>Chi tiết sản phẩm</h4>
 
-            <table class="table table-bordered" id="tblItems">
-                <thead>
-                    <tr>
-                        <th style="width:40%">MASP</th>
-                        <th style="width:20%" class="text-right">Số lượng</th>
-                        <th style="width:20%" class="text-right">Giá nhập</th>
-                        <th style="width:20%"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @for (int i = 0; i < Model.Items.Count; i++)
-                    {
+            <div style="overflow:auto;">
+                <table class="table table-bordered" id="tblItems" style="min-width: 1050px;">
+                    <thead>
                         <tr>
-                            <td>
-                                <input class="form-control" name="Items[@i].MASP" value="@Model.Items[i].MASP" />
-                                @Html.ValidationMessage($"Items[{i}].MASP", "", new { @class = "text-danger" })
-                            </td>
-                            <td>
-                                <input class="form-control text-right" type="number" min="1" name="Items[@i].SOLUONG" value="@Model.Items[i].SOLUONG" />
-                                @Html.ValidationMessage($"Items[{i}].SOLUONG", "", new { @class = "text-danger" })
-                            </td>
-                            <td>
-                                <input class="form-control text-right" type="number" min="1" step="1" name="Items[@i].GIANHAP" value="@Model.Items[i].GIANHAP" />
-                                @Html.ValidationMessage($"Items[{i}].GIANHAP", "", new { @class = "text-danger" })
-                            </td>
-                            <td class="text-right">
-                                <button type="button" class="btn btn-xs btn-danger" onclick="removeRow(this)">Xoá</button>
-                            </td>
+                            <th style="width:18%">MASP</th>
+                            <th style="width:24%">Tên SP</th>
+                            <th style="width:14%">Mã loại</th>
+                            <th style="width:20%">Ảnh</th>
+                            <th style="width:12%" class="text-right">SL</th>
+                            <th style="width:12%" class="text-right">Giá nhập</th>
+                            <th class="col-xoa"></th>
                         </tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @for (int i = 0; i < Model.Items.Count; i++)
+                        {
+                            var tenNew = newVals.ContainsKey(i + ".TENSP") ? newVals[i + ".TENSP"] : "";
+                            var maloaiNew = newVals.ContainsKey(i + ".MALOAI") ? newVals[i + ".MALOAI"] : "";
+
+                            <tr>
+                                <td>
+                                    <select class="form-control masp-select"
+                                            name="Items[@i].MASP"
+                                            data-name-template="Items[__i__].MASP">
+                                        <option value="">-- Chọn SP --</option>
+                                        @foreach (var sp in spSelect)
+                                        {
+                                            <option value="@sp.Value" @(sp.Value == (Model.Items[i].MASP ?? "").Trim() ? "selected" : "")>@sp.Text</option>
+                                        }
+                                        <option value="__NEW__" @(((Model.Items[i].MASP ?? "").Trim() == "__NEW__") ? "selected" : "")>
+                                            + Thêm sản phẩm mới
+                                        </option>
+                                    </select>
+                                    @Html.ValidationMessage($"Items[{i}].MASP", "", new { @class = "text-danger" })
+                                    <small class="text-muted d-block mt-1 new-only d-none">MASP sẽ tự sinh khi bấm “Lưu phiếu nhập”.</small>
+                                </td>
+
+                                <td>
+                                    <input type="text" class="form-control exist-only exist-ten" readonly />
+                                    <input type="text"
+                                           class="form-control new-only d-none"
+                                           placeholder="Nhập tên sản phẩm"
+                                           data-name-template="NewProducts[__i__].TENSP"
+                                           name="NewProducts[@i].TENSP"
+                                           value="@tenNew" />
+                                </td>
+
+                                <td>
+                                    <input type="text" class="form-control exist-only exist-loai" readonly />
+                                    <select class="form-control new-only d-none"
+                                            data-name-template="NewProducts[__i__].MALOAI"
+                                            name="NewProducts[@i].MALOAI">
+                                        <option value="">-- Chọn loại --</option>
+                                        @foreach (var l in loaiSelect)
+                                        {
+                                            <option value="@l.Value" @(l.Value == maloaiNew ? "selected" : "")>@l.Text</option>
+                                        }
+                                    </select>
+                                </td>
+
+                                <td>
+                                    <!-- EXIST -->
+                                    <div class="exist-only">
+                                        <input type="text" class="form-control exist-anh" readonly />
+                                        <img class="exist-anh-preview d-none mt-2"
+                                             style="max-width:120px;max-height:80px;object-fit:cover;border:1px solid #ddd;border-radius:6px;" />
+                                    </div>
+
+                                    <!-- NEW -->
+                                    <div class="new-only d-none">
+                                        <!-- map row index: CHỈ submit khi dòng là __NEW__ (JS sẽ enable/disable) -->
+                                        <input type="hidden" class="new-anh-idx" name="NewAnhRowIdx" value="@i" disabled />
+
+                                        <!-- name cố định, KHÔNG đổi -> không mất file -->
+                                        <input type="file"
+                                               class="form-control new-anhfile"
+                                               name="NewAnhFiles"
+                                               accept=".jpg,.jpeg,.png,.webp,.gif,.jfif,.bmp,image/*"
+                                               disabled />
+
+                                        <small class="text-muted d-block mt-1">
+                                            Lưu ý: Nếu submit bị lỗi validate, browser sẽ tự xoá file, bạn phải chọn lại ảnh.
+                                        </small>
+
+                                        <img class="new-anh-preview d-none mt-2"
+                                             style="max-width:120px;max-height:80px;object-fit:cover;border:1px solid #ddd;border-radius:6px;" />
+                                    </div>
+                                </td>
+
+                                <td class="col-sl">
+                                    <input class="form-control text-right"
+                                           type="number" min="1"
+                                           data-name-template="Items[__i__].SOLUONG"
+                                           name="Items[@i].SOLUONG"
+                                           value="@Model.Items[i].SOLUONG" />
+                                    @Html.ValidationMessage($"Items[{i}].SOLUONG", "", new { @class = "text-danger" })
+                                </td>
+
+                                <td class="col-gianhap">
+                                    <input class="form-control text-right"
+                                           type="number" min="1" step="1"
+                                           data-name-template="Items[__i__].GIANHAP"
+                                           name="Items[@i].GIANHAP"
+                                           value="@Model.Items[i].GIANHAP" />
+                                    @Html.ValidationMessage($"Items[{i}].GIANHAP", "", new { @class = "text-danger" })
+                                </td>
+
+                                <td class="text-right col-xoa">
+                                    <button type="button" class="btn btn-xs btn-danger" onclick="removeRow(this)">Xoá</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
 
             <button type="button" class="btn btn-default" onclick="addRow()">+ Thêm dòng</button>
 
@@ -84,26 +198,187 @@
             </div>
         }
 
+        <template id="rowTemplate">
+            <tr>
+                <td>
+                    <select class="form-control masp-select"
+                            data-name-template="Items[__i__].MASP"
+                            name="Items[__i__].MASP">
+                        <option value="">-- Chọn SP --</option>
+                        @foreach (var sp in spSelect)
+                        {
+                            <option value="@sp.Value">@sp.Text</option>
+                        }
+                        <option value="__NEW__">+ Thêm sản phẩm mới</option>
+                    </select>
+                    <small class="text-muted d-block mt-1 new-only d-none">MASP sẽ tự sinh khi bấm “Lưu phiếu nhập”.</small>
+                </td>
+
+                <td>
+                    <input type="text" class="form-control exist-only exist-ten" readonly />
+                    <input type="text" class="form-control new-only d-none"
+                           placeholder="Nhập tên sản phẩm"
+                           data-name-template="NewProducts[__i__].TENSP"
+                           name="NewProducts[__i__].TENSP" />
+                </td>
+
+                <td>
+                    <input type="text" class="form-control exist-only exist-loai" readonly />
+                    <select class="form-control new-only d-none"
+                            data-name-template="NewProducts[__i__].MALOAI"
+                            name="NewProducts[__i__].MALOAI">
+                        <option value="">-- Chọn loại --</option>
+                        @foreach (var l in loaiSelect)
+                        {
+                            <option value="@l.Value">@l.Text</option>
+                        }
+                    </select>
+                </td>
+
+                <td>
+                    <div class="exist-only">
+                        <input type="text" class="form-control exist-anh" readonly />
+                        <img class="exist-anh-preview d-none mt-2"
+                             style="max-width:120px;max-height:80px;object-fit:cover;border:1px solid #ddd;border-radius:6px;" />
+                    </div>
+
+                    <div class="new-only d-none">
+                        <input type="hidden" class="new-anh-idx" name="NewAnhRowIdx" value="" disabled />
+                        <input type="file"
+                               class="form-control new-anhfile"
+                               name="NewAnhFiles"
+                               accept=".jpg,.jpeg,.png,.webp,.gif,.jfif,.bmp,image/*"
+                               disabled />
+                        <small class="text-muted d-block mt-1">Chọn ảnh từ máy.</small>
+                        <img class="new-anh-preview d-none mt-2"
+                             style="max-width:120px;max-height:80px;object-fit:cover;border:1px solid #ddd;border-radius:6px;" />
+                    </div>
+                </td>
+
+                <td class="col-sl">
+                    <input class="form-control text-right" type="number" min="1"
+                           data-name-template="Items[__i__].SOLUONG"
+                           name="Items[__i__].SOLUONG" value="1" />
+                </td>
+
+                <td class="col-gianhap">
+                    <input class="form-control text-right" type="number" min="1" step="1"
+                           data-name-template="Items[__i__].GIANHAP"
+                           name="Items[__i__].GIANHAP" value="1" />
+                </td>
+
+                <td class="text-right col-xoa">
+                    <button type="button" class="btn btn-xs btn-danger" onclick="removeRow(this)">Xoá</button>
+                </td>
+            </tr>
+        </template>
+
         <script>
+            const NEW_VALUE = "__NEW__";
+            const spData = @Html.Raw(Json.Encode(ViewBag.SanPhamJson ?? new object[0]));
+            const spMap = {};
+            spData.forEach(p => { spMap[String(p.MASP)] = p; });
+
+            const baseImgUrl = '@Url.Content("~/Content/Anh/sanpham/")';
+
+            function reindexRows() {
+                const rows = document.querySelectorAll("#tblItems tbody tr");
+                rows.forEach((tr, idx) => {
+                    tr.querySelectorAll("[data-name-template]").forEach(el => {
+                        const tpl = el.getAttribute("data-name-template");
+                        if (!tpl) return;
+                        el.setAttribute("name", tpl.replace(/__i__/g, idx));
+                    });
+
+                    // cập nhật row index (hidden) - dù disabled hay không vẫn set value
+                    tr.querySelectorAll(".new-anh-idx").forEach(h => h.value = idx);
+                });
+            }
+
+            function setRowMode(tr) {
+                const sel = tr.querySelector(".masp-select");
+                const val = (sel ? sel.value : "");
+                const isNew = (val === NEW_VALUE);
+
+                // toggle hiển thị
+                tr.querySelectorAll(".new-only").forEach(el => el.classList.toggle("d-none", !isNew));
+                tr.querySelectorAll(".exist-only").forEach(el => el.classList.toggle("d-none", isNew));
+
+                // FIX QUAN TRỌNG: chỉ submit input của new-only khi isNew
+                tr.querySelectorAll(".new-only input, .new-only select, .new-only textarea").forEach(el => {
+                    el.disabled = !isNew;
+                });
+
+                // (tuỳ chọn) disable exist-only khi isNew cho gọn
+                tr.querySelectorAll(".exist-only input, .exist-only select, .exist-only textarea").forEach(el => {
+                    el.disabled = isNew;
+                });
+
+                if (!isNew) {
+                    const p = spMap[String(val)];
+                    tr.querySelector(".exist-ten").value = p ? (p.TENSP || "") : "";
+                    tr.querySelector(".exist-loai").value = p ? (p.MALOAI ?? "") : "";
+                    tr.querySelector(".exist-anh").value = p ? (p.ANH || "") : "";
+
+                    const img = tr.querySelector(".exist-anh-preview");
+                    if (img && p && p.ANH) {
+                        img.src = baseImgUrl + p.ANH;
+                        img.classList.remove("d-none");
+                    } else if (img) {
+                        img.classList.add("d-none");
+                    }
+                }
+            }
+
+            function previewFile(input, imgEl) {
+                if (!input || !imgEl) return;
+                const f = input.files && input.files[0];
+                if (!f) { imgEl.classList.add("d-none"); return; }
+
+                const reader = new FileReader();
+                reader.onload = e => {
+                    imgEl.src = e.target.result;
+                    imgEl.classList.remove("d-none");
+                };
+                reader.readAsDataURL(f);
+            }
+
+            function wireRow(tr) {
+                const sel = tr.querySelector(".masp-select");
+                if (sel) sel.addEventListener("change", () => setRowMode(tr));
+
+                const fileInput = tr.querySelector(".new-anhfile");
+                const imgNew = tr.querySelector(".new-anh-preview");
+                if (fileInput) fileInput.addEventListener("change", () => previewFile(fileInput, imgNew));
+            }
+
             function addRow() {
-                var tbody = document.querySelector("#tblItems tbody");
-                var i = tbody.querySelectorAll("tr").length;
+                const tbody = document.querySelector("#tblItems tbody");
+                const tpl = document.getElementById("rowTemplate");
+                const clone = tpl.content.cloneNode(true);
+                tbody.appendChild(clone);
 
-                var tr = document.createElement("tr");
-                tr.innerHTML =
-                    '<td><input class="form-control" name="Items[' + i + '].MASP" value="" /></td>' +
-                    '<td><input class="form-control text-right" type="number" min="1" name="Items[' + i + '].SOLUONG" value="1" /></td>' +
-                    '<td><input class="form-control text-right" type="number" min="1" step="1" name="Items[' + i + '].GIANHAP" value="1" /></td>' +
-                    '<td class="text-right"><button type="button" class="btn btn-xs btn-danger" onclick="removeRow(this)">Xoá</button></td>';
+                reindexRows();
 
-                tbody.appendChild(tr);
+                const newTr = tbody.querySelector("tr:last-child");
+                wireRow(newTr);
+                setRowMode(newTr);
             }
 
             function removeRow(btn) {
-                var tbody = document.querySelector("#tblItems tbody");
+                const tbody = document.querySelector("#tblItems tbody");
                 if (tbody.querySelectorAll("tr").length <= 1) return;
                 btn.closest("tr").remove();
+                reindexRows();
             }
+
+            document.addEventListener("DOMContentLoaded", function () {
+                reindexRows();
+                document.querySelectorAll("#tblItems tbody tr").forEach(tr => {
+                    wireRow(tr);
+                    setRowMode(tr);
+                });
+            });
         </script>
     </div>
-</div> 
+</div>

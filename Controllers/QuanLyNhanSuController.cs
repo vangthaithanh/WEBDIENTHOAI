@@ -38,30 +38,18 @@ namespace WebDienThoai.Controllers
             if (!IsAdmin())
                 return RedirectToAction("Index", "Home");
 
-            // set breadcrumb
             ViewBag.BreadcrumbList = new List<WebDienThoai.Models.BreadcrumbItem>
-            {
-                new WebDienThoai.Models.BreadcrumbItem { Text = "Trang chủ", Action = "Index", Controller = "Home" },
-                new WebDienThoai.Models.BreadcrumbItem { Text = "Quản lý nhân sự" }
-            };
+        {
+            new WebDienThoai.Models.BreadcrumbItem { Text = "Trang chủ", Action = "Index", Controller = "Home" },
+            new WebDienThoai.Models.BreadcrumbItem { Text = "Quản lý nhân sự" }
+        };
 
             var list = new List<NhanVienListItemViewModel>();
 
             using (var conn = new SqlConnection(GetConnStr()))
-            using (var cmd = conn.CreateCommand())
+            using (var cmd = new SqlCommand("dbo.usp_User_ListWithRole", conn))
             {
-                cmd.CommandText = @"
-                    SELECT  nv.ID,
-                            tk.TENTK,
-                            nd.HOTEN,
-                            nd.SDT,
-                            nd.EMAIL,
-                            nv.CHUCVU,
-                            nv.NGAYVAOLAM
-                    FROM    NHANVIEN nv
-                    INNER JOIN NGUOIDUNG nd ON nv.ID = nd.ID
-                    INNER JOIN TAIKHOAN tk  ON nv.ID = tk.ID
-                    ORDER BY nv.ID";
+                cmd.CommandType = CommandType.StoredProcedure;
 
                 conn.Open();
                 using (var rd = cmd.ExecuteReader())
@@ -70,21 +58,50 @@ namespace WebDienThoai.Controllers
                     {
                         list.Add(new NhanVienListItemViewModel
                         {
-                            ID = rd.GetInt32(rd.GetOrdinal("ID")),
-                            UserName = rd.GetString(rd.GetOrdinal("TENTK")),
-                            HoTen = rd["HOTEN"] as string,
-                            SDT = rd["SDT"] as string,
-                            Email = rd["EMAIL"] as string,
-                            ChucVu = rd["CHUCVU"] as string,
-                            NgayVaoLam = rd["NGAYVAOLAM"] == DBNull.Value
-                                            ? (DateTime?)null
-                                            : Convert.ToDateTime(rd["NGAYVAOLAM"])
+                            ID = Convert.ToInt32(rd["ID"]),
+                            UserName = rd["UserName"]?.ToString(),
+                            HoTen = rd["HoTen"]?.ToString(),
+                            SDT = rd["SDT"]?.ToString(),
+                            Email = rd["Email"]?.ToString(),
+                            ChucVu = rd["ChucVu"]?.ToString(),
+                            NgayVaoLam = rd["NgayVaoLam"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(rd["NgayVaoLam"]),
+                            RoleCode = rd["RoleCode"]?.ToString()
                         });
                     }
                 }
             }
 
             return View(list);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public ActionResult ChangeRole(int id, string roleCode)
+        {
+            if (!IsAdmin())
+                return RedirectToAction("Index", "Home");
+
+            try
+            {
+                using (var conn = new SqlConnection(GetConnStr()))
+                using (var cmd = new SqlCommand("dbo.usp_User_ChangeRole", conn))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.Add("@ID", SqlDbType.Int).Value = id;
+                    cmd.Parameters.Add("@ROLE_CODE", SqlDbType.VarChar, 10).Value = roleCode;
+
+                    conn.Open();
+                    cmd.ExecuteNonQuery();
+                }
+
+                TempData["Success"] = $"Đã đổi role cho ID={id} -> {roleCode}";
+            }
+            catch (SqlException ex)
+            {
+                TempData["Error"] = "Lỗi đổi role: " + ex.Message;
+            }
+
+            return RedirectToAction("Index");
         }
 
         // GET: QuanLyNhanSu/Create

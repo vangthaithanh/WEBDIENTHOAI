@@ -116,6 +116,7 @@
                         </button>
                     </div>
 
+                    @* ====== BLOCK MUA NGAY (ĐÃ THAY) ====== *@
                     <div class="col-6">
                         @using (Html.BeginForm("XacNhanMuaNgay", "GioHang", FormMethod.Post, new { @class = "d-grid h-100" }))
                         {
@@ -123,15 +124,29 @@
                             <input type="hidden" name="masp" value="@Model.MASP" />
                             <input type="hidden" name="soluong" value="1" />
 
-                            <button type="submit" class="w-100 btn fw-bold text-uppercase custom-btn"
+                            <button type="submit"
+                                    class="w-100 btn fw-bold text-uppercase custom-btn mb-2"
                                     style="background-color: #eae2d7; color: #333; padding: 12px 0; border-radius: 8px;"
-                                    onclick="return confirm('Xác nhận mua ngay');">
+                                    onclick="return confirm('Xác nhận mua ngay (COD)?');">
                                 MUA NGAY
+                            </button>
+
+                            <button type="submit"
+                                    formaction="@Url.Action("CreatePaymentUrlVnpayMuaNgay", "Checkout")"
+                                    formmethod="post"
+                                    class="w-100 btn fw-bold text-uppercase custom-btn"
+                                    style="background-color: #0b5ed7; color: #fff; padding: 12px 0; border-radius: 8px;"
+                                    onclick="return confirm('Thanh toán mua ngay qua VNPAY?');">
+                                MUA NGAY (VNPAY)
                             </button>
                         }
                     </div>
+                    @* ====== END BLOCK ====== *@
+
                 </div>
+
                 <div id="modalUuDai" class="modal fade"></div>
+
                 <form method="get" action="@Url.Action("Add", "GioHang")" class="d-flex align-items-center gap-2 mb-3">
                     <div class="d-flex flex-column align-items-start" style="width: 120px;">
                         <small class="fw-bold mb-1">SỐ LƯỢNG</small>
@@ -144,6 +159,7 @@
                         THÊM GIỎ HÀNG
                     </button>
                 </form>
+
                 @* khung đánh giá *@
                 <div class="card border-0 shadow-sm rounded-3" style="width: 100%; max-width: 600px; background-color: #fff;">
                     <div class="card-body p-4">
@@ -226,6 +242,7 @@
         </div>
     </div>
 </main>
+
 @section scripts {
     <script>
         function ChonUuDai(ma, phantram) {

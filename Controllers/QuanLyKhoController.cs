@@ -1,8 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Configuration;
+using System.IO;
 using System.Linq;
 using System.Data.SqlClient;
+using System.Text.RegularExpressions;
+using System.Web;
 using System.Web.Mvc;
 using WebDienThoai.DAL;
 using WebDienThoai.Models;
@@ -12,11 +15,11 @@ namespace WebDienThoai.Controllers
 {
     public class QuanLyKhoController : Controller
     {
+        private const string NEW_VALUE = "__NEW__";
         private QuanLyKhoDAL _dal;
 
         private string GetConnStr()
         {
-            // Quản lý kho = nghiệp vụ admin => default Conn_Admin
             var connName = Session["ConnName"] as string;
             if (string.IsNullOrWhiteSpace(connName))
                 connName = "Conn_Admin";
@@ -36,27 +39,125 @@ namespace WebDienThoai.Controllers
             base.OnActionExecuting(filterContext);
         }
 
+        private void LoadPhieuNhapLookup()
+        {
+            var sp = _dal.SanPham_ListForNhap();
+            ViewBag.SanPhamJson = sp;
+
+            ViewBag.SanPhamSelect = sp.Select(x => new SelectListItem
+            {
+                Value = x.MASP.ToString(),
+                Text = $"{x.MASP} - {x.TENSP}"
+            }).ToList();
+
+            var loai = _dal.LoaiSanPham_List();
+            ViewBag.LoaiSelect = loai.Select(x => new SelectListItem
+            {
+                Value = x.MALOAI.ToString(),
+                Text = $"{x.MALOAI} - {x.TENLOAI}"
+            }).ToList();
+        }
+
+        // ===== Upload ảnh SP mới: name="NewAnhFiles" + hidden name="NewAnhRowIdx" =====
+        // Lưu ý: View sẽ DISABLE hidden/file nếu dòng không phải __NEW__ -> tránh lệch index.
+        private Dictionary<int, HttpPostedFileBase> GetNewAnhFilesByRowIndex()
+        {
+            var map = new Dictionary<int, HttpPostedFileBase>();
+
+            var idxVals = Request.Form.GetValues("NewAnhRowIdx") ?? new string[0];
+
+            // lấy các file có key = NewAnhFiles theo đúng thứ tự submit
+            var files = new List<HttpPostedFileBase>();
+            for (int i = 0; i < Request.Files.Count; i++)
+            {
+                var key = Request.Files.AllKeys[i] ?? "";
+                if (!string.Equals(key, "NewAnhFiles", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                files.Add(Request.Files[i]);
+            }
+
+            var n = Math.Min(idxVals.Length, files.Count);
+            for (int k = 0; k < n; k++)
+            {
+                if (!int.TryParse(idxVals[k], out int rowIdx)) continue;
+
+                var f = files[k];
+                if (f != null && f.ContentLength > 0)
+                    map[rowIdx] = f;
+            }
+
+            return map;
+        }
+
+        // fallback kiểu cũ nếu bạn còn chỗ dùng name="NewProducts[i].ANHFILE"
+        private Dictionary<int, HttpPostedFileBase> GetNewProductFilesByIndex()
+        {
+            var dict = new Dictionary<int, HttpPostedFileBase>();
+            var keys = Request.Files.AllKeys;
+
+            for (int k = 0; k < keys.Length; k++)
+            {
+                var key = keys[k] ?? "";
+                if (string.IsNullOrWhiteSpace(key)) continue;
+
+                var m = Regex.Match(key, @"NewProducts\[(\d+)\]\.ANHFILE", RegexOptions.IgnoreCase);
+                if (!m.Success) continue;
+
+                if (!int.TryParse(m.Groups[1].Value, out int idx)) continue;
+
+                var f = Request.Files[k];
+                if (f != null && f.ContentLength > 0)
+                    dict[idx] = f;
+            }
+
+            return dict;
+        }
+
+        private Dictionary<int, HttpPostedFileBase> GetNewFilesSmart()
+        {
+            var a = GetNewAnhFilesByRowIndex();
+            if (a.Count > 0) return a;
+            return GetNewProductFilesByIndex();
+        }
+
+        private string SaveUploadedSanPhamImage(HttpPostedFileBase file)
+        {
+            if (file == null || file.ContentLength <= 0)
+                throw new InvalidOperationException("File ảnh không hợp lệ.");
+
+            const int maxBytes = 10 * 1024 * 1024; // 10MB
+            if (file.ContentLength > maxBytes)
+                throw new InvalidOperationException("Ảnh quá lớn (tối đa 10MB).");
+
+            var ext = (Path.GetExtension(file.FileName) ?? "").ToLowerInvariant();
+            var allow = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ".jpg",".jpeg",".png",".webp",".gif",".jfif",".bmp"
+            };
+            if (!allow.Contains(ext))
+                throw new InvalidOperationException("Định dạng ảnh không hỗ trợ. Chỉ: jpg, jpeg, png, webp, gif, jfif, bmp.");
+
+            var dir = Server.MapPath("~/Content/Anh/sanpham");
+            if (!Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+
+            var safeName = $"{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}{ext}";
+            var fullPath = Path.Combine(dir, safeName);
+
+            file.SaveAs(fullPath);
+            return safeName;
+        }
+
+        // ===== Index / các màn khác (giữ như bạn đang dùng) =====
         public ActionResult Index()
         {
-            ViewBag.BreadcrumbList = new List<WebDienThoai.Models.BreadcrumbItem>
-            {
-                new WebDienThoai.Models.BreadcrumbItem { Text = "Trang chủ", Action = "Index", Controller = "Home" },
-                new WebDienThoai.Models.BreadcrumbItem { Text = "Quản lý kho" }
-            };
-
             var kho = _dal.GetKhoAll();
             return View(kho);
         }
 
         public ActionResult TonKho(string maKho)
         {
-            ViewBag.BreadcrumbList = new List<WebDienThoai.Models.BreadcrumbItem>
-            {
-                new WebDienThoai.Models.BreadcrumbItem { Text = "Trang chủ", Action = "Index", Controller = "Home" },
-                new WebDienThoai.Models.BreadcrumbItem { Text = "Quản lý kho", Action = "Index", Controller = "QuanLyKho" },
-                new WebDienThoai.Models.BreadcrumbItem { Text = "Tồn kho" }
-            };
-
             var khoList = _dal.GetKhoAll();
             var vm = new TonKhoVM
             {
@@ -73,13 +174,6 @@ namespace WebDienThoai.Controllers
 
         public ActionResult PhieuNhap(string maKho, DateTime? tuNgay, DateTime? denNgay)
         {
-            ViewBag.BreadcrumbList = new List<WebDienThoai.Models.BreadcrumbItem>
-            {
-                new WebDienThoai.Models.BreadcrumbItem { Text = "Trang chủ", Action = "Index", Controller = "Home" },
-                new WebDienThoai.Models.BreadcrumbItem { Text = "Quản lý kho", Action = "Index", Controller = "QuanLyKho" },
-                new WebDienThoai.Models.BreadcrumbItem { Text = "Phiếu nhập" }
-            };
-
             var vm = new PhieuNhapListVM
             {
                 MAKHO = maKho,
@@ -94,13 +188,6 @@ namespace WebDienThoai.Controllers
 
         public ActionResult ChiTietPhieuNhap(int id)
         {
-            ViewBag.BreadcrumbList = new List<WebDienThoai.Models.BreadcrumbItem>
-            {
-                new WebDienThoai.Models.BreadcrumbItem { Text = "Trang chủ", Action = "Index", Controller = "Home" },
-                new WebDienThoai.Models.BreadcrumbItem { Text = "Quản lý kho", Action = "Index", Controller = "QuanLyKho" },
-                new WebDienThoai.Models.BreadcrumbItem { Text = "Chi tiết phiếu nhập" }
-            };
-
             var pn = _dal.GetPhieuNhapById(id);
             if (pn == null) return HttpNotFound();
 
@@ -113,78 +200,156 @@ namespace WebDienThoai.Controllers
         }
 
         [HttpGet]
-        public ActionResult TaoPhieuNhap()
+        public ActionResult InPhieuNhap(int id)
         {
-            ViewBag.BreadcrumbList = new List<WebDienThoai.Models.BreadcrumbItem>
+            var pn = _dal.GetPhieuNhapById(id);
+            if (pn == null) return HttpNotFound();
+
+            var vm = new PhieuNhapDetailVM
             {
-                new WebDienThoai.Models.BreadcrumbItem { Text = "Trang chủ", Action = "Index", Controller = "Home" },
-                new WebDienThoai.Models.BreadcrumbItem { Text = "Quản lý kho", Action = "Index", Controller = "QuanLyKho" },
-                new WebDienThoai.Models.BreadcrumbItem { Text = "Tạo phiếu nhập" }
+                PhieuNhap = pn,
+                ChiTiet = _dal.GetChiTietPN(id)
             };
 
+            return View("InPhieuNhap", vm);
+        }
+
+        // =========================
+        // GET: TaoPhieuNhap
+        // =========================
+        [HttpGet]
+        public ActionResult TaoPhieuNhap()
+        {
             var vm = new CreatePhieuNhapVM
             {
                 NGAYNHAP = DateTime.Now,
                 KhoList = _dal.GetKhoAll()
             };
+
+            LoadPhieuNhapLookup();
             return View(vm);
         }
 
+        // =========================
+        // POST: TaoPhieuNhap
+        // =========================
         [HttpPost]
         [ValidateAntiForgeryToken]
         public ActionResult TaoPhieuNhap(CreatePhieuNhapVM vm)
         {
-            // luôn đổ lại KhoList để View không lỗi khi return
             vm.KhoList = _dal.GetKhoAll();
+            LoadPhieuNhapLookup();
 
-            // ===== validate form =====
+            vm.Items = (vm.Items ?? new List<CreatePhieuNhapItemVM>())
+                        .Where(x => x != null)
+                        .ToList();
+
+            // giữ lại dữ liệu SP mới để render lại (trừ file)
+            var newVals = new Dictionary<string, string>();
+
+            // lấy file theo map ổn định
+            var filesByIdx = GetNewFilesSmart();
+
+            // ===== validate header =====
             if (string.IsNullOrWhiteSpace(vm.MAKHO))
                 ModelState.AddModelError("MAKHO", "Vui lòng chọn kho.");
 
             if (string.IsNullOrWhiteSpace(vm.NHACUNGCAP))
                 ModelState.AddModelError("NHACUNGCAP", "Vui lòng nhập nhà cung cấp.");
 
-            vm.Items = (vm.Items ?? new List<CreatePhieuNhapItemVM>())
-                        .Where(x => x != null)
-                        .ToList();
+            if (Session["UserId"] == null)
+                ModelState.AddModelError("", "Bạn cần đăng nhập (có ID người tạo) để tạo phiếu nhập.");
 
             if (vm.Items.Count == 0)
                 ModelState.AddModelError("", "Cần ít nhất 1 dòng sản phẩm.");
 
+            // ===== validate items =====
             for (int i = 0; i < vm.Items.Count; i++)
             {
-                if (string.IsNullOrWhiteSpace(vm.Items[i].MASP))
-                    ModelState.AddModelError($"Items[{i}].MASP", "Vui lòng nhập MASP.");
+                var it = vm.Items[i];
+                var maspRaw = (it.MASP ?? "").Trim();
 
-                if (vm.Items[i].SOLUONG <= 0)
+                if (string.IsNullOrWhiteSpace(maspRaw))
+                {
+                    ModelState.AddModelError($"Items[{i}].MASP", "Vui lòng chọn MASP.");
+                }
+                else if (!string.Equals(maspRaw, NEW_VALUE, StringComparison.Ordinal))
+                {
+                    if (!int.TryParse(maspRaw, out _))
+                        ModelState.AddModelError($"Items[{i}].MASP", "MASP không hợp lệ (phải là số).");
+                }
+                else
+                {
+                    // SP mới: chỉ cần TENSP + MALOAI + ẢNH (GIABAN bỏ)
+                    var ten = (Request.Form[$"NewProducts[{i}].TENSP"] ?? "").Trim();
+                    var maloaiStr = (Request.Form[$"NewProducts[{i}].MALOAI"] ?? "").Trim();
+
+                    newVals[$"{i}.TENSP"] = ten;
+                    newVals[$"{i}.MALOAI"] = maloaiStr;
+
+                    if (string.IsNullOrWhiteSpace(ten))
+                        ModelState.AddModelError($"Items[{i}].MASP", "SP mới: chưa nhập Tên SP.");
+
+                    if (!int.TryParse(maloaiStr, out int maloaiInt) || maloaiInt <= 0)
+                        ModelState.AddModelError($"Items[{i}].MASP", "SP mới: Mã loại không hợp lệ.");
+
+                    if (!filesByIdx.TryGetValue(i, out var f) || f == null || f.ContentLength <= 0)
+                        ModelState.AddModelError($"Items[{i}].MASP", "SP mới: Vui lòng chọn ảnh (Browse từ máy).");
+                }
+
+                if (it.SOLUONG <= 0)
                     ModelState.AddModelError($"Items[{i}].SOLUONG", "Số lượng phải >= 1.");
 
-                if (vm.Items[i].GIANHAP <= 0)
+                if (it.GIANHAP <= 0)
                     ModelState.AddModelError($"Items[{i}].GIANHAP", "Giá nhập phải > 0.");
             }
 
-            // ===== bắt buộc đăng nhập vì PHIEUNHAP.ID NOT NULL =====
-            if (Session["UserId"] == null)
-            {
-                ModelState.AddModelError("", "Bạn cần đăng nhập (có ID người tạo) để tạo phiếu nhập.");
-                return View(vm);
-            }
+            ViewBag.NewProducts = newVals;
 
-            if (!ModelState.IsValid) return View(vm);
+            if (!ModelState.IsValid)
+                return View(vm);
 
             try
             {
-                int userId = Convert.ToInt32(Session["UserId"]);   // INT
-                int maKhoInt = Convert.ToInt32(vm.MAKHO);          // INT
-                DateTime ngayNhap = vm.NGAYNHAP ?? DateTime.Now;   // FIX: thiếu biến này trong code bạn
+                int userId = Convert.ToInt32(Session["UserId"]);
 
-                // Giữ MASP dạng string, DAL sẽ Convert.ToInt32 để insert
-                var items = vm.Items.Select(x => new ChiTietPN
+                // MAKHO đang là string nhưng DB của bạn đang dùng kiểu số -> Convert.ToInt32 như code cũ của bạn
+                int maKhoInt = Convert.ToInt32(vm.MAKHO);
+
+                DateTime ngayNhap = vm.NGAYNHAP ?? DateTime.Now;
+
+                var items = new List<ChiTietPN>();
+
+                for (int i = 0; i < vm.Items.Count; i++)
                 {
-                    MASP = x.MASP.Trim(),
-                    SOLUONG = x.SOLUONG,
-                    GIANHAP = x.GIANHAP
-                }).ToList();
+                    var maspRaw = (vm.Items[i].MASP ?? "").Trim();
+                    int maspInt;
+
+                    if (string.Equals(maspRaw, NEW_VALUE, StringComparison.Ordinal))
+                    {
+                        var ten = newVals[$"{i}.TENSP"].Trim();
+                        int maloaiInt = Convert.ToInt32(newVals[$"{i}.MALOAI"]);
+
+                        if (!filesByIdx.TryGetValue(i, out var file) || file == null || file.ContentLength <= 0)
+                            throw new InvalidOperationException("Thiếu file ảnh upload (SP mới).");
+
+                        var savedFileName = SaveUploadedSanPhamImage(file);
+
+                        // GIABAN = 0 (trigger sẽ tự cập nhật theo phiếu nhập)
+                        maspInt = _dal.SanPham_Create(maloaiInt, ten, 0m, savedFileName);
+                    }
+                    else
+                    {
+                        maspInt = Convert.ToInt32(maspRaw);
+                    }
+
+                    items.Add(new ChiTietPN
+                    {
+                        MASP = maspInt.ToString(),
+                        SOLUONG = vm.Items[i].SOLUONG,
+                        GIANHAP = vm.Items[i].GIANHAP
+                    });
+                }
 
                 int newId = _dal.CreatePhieuNhap(
                     userId,
@@ -197,11 +362,6 @@ namespace WebDienThoai.Controllers
                 TempData["Success"] = "Tạo phiếu nhập thành công.";
                 return RedirectToAction("ChiTietPhieuNhap", new { id = newId });
             }
-            catch (FormatException)
-            {
-                ModelState.AddModelError("", "MASP/MAKHO phải là số (int). Vui lòng kiểm tra lại.");
-                return View(vm);
-            }
             catch (SqlException ex)
             {
                 ModelState.AddModelError("", "Có lỗi khi tạo phiếu nhập (SQL): " + ex.Message);
@@ -213,15 +373,10 @@ namespace WebDienThoai.Controllers
                 return View(vm);
             }
         }
+
+        // ===== DonHang giữ nguyên nếu đang dùng =====
         public ActionResult DonHang(int? maHD, DateTime? tuNgay, DateTime? denNgay, string trangThai)
         {
-            ViewBag.BreadcrumbList = new List<WebDienThoai.Models.BreadcrumbItem>
-    {
-        new WebDienThoai.Models.BreadcrumbItem { Text = "Trang chủ", Action = "Index", Controller = "Home" },
-        new WebDienThoai.Models.BreadcrumbItem { Text = "Quản lý kho", Action = "Index", Controller = "QuanLyKho" },
-        new WebDienThoai.Models.BreadcrumbItem { Text = "Quản lý đơn hàng" }
-    };
-
             var vm = new DonHangKhoListVM();
             vm.Filter.MaHD = maHD;
             vm.Filter.TuNgay = tuNgay;
@@ -229,7 +384,7 @@ namespace WebDienThoai.Controllers
             vm.Filter.TrangThai = trangThai;
 
             vm.Items = _dal.DonHangKho_List(maHD, tuNgay, denNgay, trangThai);
-            return View(vm); // Views/QuanLyKho/DonHang.cshtml
+            return View(vm);
         }
 
         [HttpPost]
@@ -247,6 +402,19 @@ namespace WebDienThoai.Controllers
             }
 
             return RedirectToAction("DonHang", new { maHD = maHDFilter, tuNgay, denNgay, trangThai });
+        }
+
+        // ==== Thống kê doanh thu ====
+        [HttpGet]
+        public ActionResult ThongKeDoanhThu(DateTime? tuNgay, DateTime? denNgay)
+        {
+            var vm = new ThongKeDoanhThuVM
+            {
+                TuNgay = tuNgay,
+                DenNgay = denNgay,
+                Rows = _dal.ThongKeDoanhThu(tuNgay, denNgay)
+            };
+            return View(vm);
         }
     }
 }

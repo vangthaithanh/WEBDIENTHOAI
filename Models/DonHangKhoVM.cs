@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace WebDienThoai.Models.ViewModels
 {
@@ -35,5 +36,22 @@ namespace WebDienThoai.Models.ViewModels
         {
             "Chờ xử lý", "Đang giao", "Đã giao", "Hủy"
         };
+    }
+
+    // ==== Thống kê doanh thu ====
+    public class DoanhThuRowVM
+    {
+        public DateTime Ngay { get; set; }
+        public decimal DoanhThu { get; set; }
+        public int SoDon { get; set; }
+    }
+
+    public class ThongKeDoanhThuVM
+    {
+        public DateTime? TuNgay { get; set; }
+        public DateTime? DenNgay { get; set; }
+        public List<DoanhThuRowVM> Rows { get; set; } = new List<DoanhThuRowVM>();
+        public decimal TongDoanhThu => Rows.Sum(r => r.DoanhThu);
+        public int TongDon => Rows.Sum(r => r.SoDon);
     }
 }
