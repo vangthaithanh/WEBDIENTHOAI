@@ -475,7 +475,7 @@ namespace WebDienThoai.Controllers
                     }
                 }
 
-                EmailService.Send(vm.Email, "OTP đặt lại mật khẩu", $"Mã OTP: {otp}");
+                EmailService.SendOtpEmail(vm.Email, vm.UserName, otp, 10);
                 TempData["Info"] = "OTP đã được gửi tới email.";
                 return RedirectToAction("ResetPasswordOtp", new { userName = vm.UserName });
             }
